@@ -1,0 +1,4 @@
+include CHANGELOG.md
+recursive-include data *.csv *.md
+recursive-include examples *.py
+recursive-include results *.csv *.json *.md *.png *.sha256

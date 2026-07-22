@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pandas as pd
+import pytest
+
+from ml_evaluation_workbench.cli import main
+
+from conftest import DATASET
+
+
+def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
+    status = main(
+        [
+            "evaluate",
+            str(DATASET),
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert status == 0
+    metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
+    predictions = pd.read_csv(tmp_path / "predictions.csv")
+    assert metrics["project_version"] == "0.1.0"
+    assert metrics["report_version"] == 1
+    assert metrics["dataset"]["rows"] == 344
+    assert len(predictions) == 86
+    assert (tmp_path / "confusion_matrix.png").stat().st_size > 0
+    output = capsys.readouterr().out
+    assert "Dummy accuracy:" in output
+    assert "Logistic regression macro F1:" in output
+
+
+def test_cli_reports_invalid_test_size(tmp_path: Path, capsys) -> None:
+    status = main(
+        [
+            "evaluate",
+            str(DATASET),
+            "--output-dir",
+            str(tmp_path),
+            "--test-size",
+            "1.0",
+        ]
+    )
+
+    assert status == 2
+    assert "test_size must be" in capsys.readouterr().err
+
+
+def test_cli_version(capsys) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--version"])
+
+    assert exc_info.value.code == 0
+    assert capsys.readouterr().out == "0.1.0\n"

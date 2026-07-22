@@ -1,0 +1,54 @@
+{
+  "report_version": 1,
+  "project_version": "0.1.0",
+  "dataset": {
+    "source": "data/penguins.csv",
+    "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
+    "rows": 344,
+    "target": "species",
+    "classes": [
+      "Adelie",
+      "Chinstrap",
+      "Gentoo"
+    ],
+    "features": [
+      "bill_length_mm",
+      "bill_depth_mm"
+    ],
+    "missing_feature_cells": 4
+  },
+  "split": {
+    "strategy": "stratified_holdout",
+    "random_state": 42,
+    "test_size": 0.25,
+    "train_rows": 258,
+    "test_rows": 86
+  },
+  "models": {
+    "dummy": {
+      "accuracy": 0.44186,
+      "balanced_accuracy": 0.333333,
+      "macro_f1": 0.204301,
+      "per_class_recall": {
+        "Adelie": 1.0,
+        "Chinstrap": 0.0,
+        "Gentoo": 0.0
+      }
+    },
+    "logistic_regression": {
+      "accuracy": 0.94186,
+      "balanced_accuracy": 0.919671,
+      "macro_f1": 0.923661,
+      "per_class_recall": {
+        "Adelie": 1.0,
+        "Chinstrap": 0.823529,
+        "Gentoo": 0.935484
+      }
+    }
+  },
+  "comparison": {
+    "accuracy_gain": 0.5,
+    "balanced_accuracy_gain": 0.586338,
+    "macro_f1_gain": 0.71936
+  }
+}
