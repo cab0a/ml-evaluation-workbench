@@ -9,12 +9,13 @@ interpretation using public datasets.
 
 ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
 
-**Question → Baseline → Pipeline → Holdout Evaluation → Error Review**
+**Question → Baseline → Pipeline → Holdout → Cross-Validation → Error Review**
 
-Version 0.1.0 asks a deliberately narrow question: how well can a linear
+Version 0.2.0 asks a deliberately narrow question: how well can a linear
 classifier separate three Palmer penguin species using only bill length and
 bill depth? It compares a majority-class dummy baseline with multinomial
-logistic regression under one deterministic stratified holdout split.
+logistic regression under one deterministic stratified holdout split and five
+shared stratified cross-validation folds.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
@@ -33,19 +34,22 @@ This project keeps those decisions explicit:
 - Imputation and scaling are fitted only on the training partition.
 - Accuracy is reported alongside balanced accuracy, macro F1, and per-class
   recall.
-- Aggregate metrics, row-level predictions, and a confusion matrix are
+- Holdout metrics, fold-level evidence, row-level predictions, and figures are
   committed as reviewable artifacts.
 
 ## Features
 
 - Pinned, checksum-verified public dataset
 - Deterministic stratified train/test split
+- Five-fold stratified cross-validation shared by both models
 - Majority-class `DummyClassifier` baseline
 - Median imputation and standardization inside a scikit-learn `Pipeline`
 - Logistic-regression classifier using two interpretable measurements
 - Accuracy, balanced accuracy, macro F1, and per-class recall
+- Cross-validation mean, population standard deviation, minimum, and maximum
 - Row-level holdout predictions with source-row references
-- Confusion-matrix image
+- Fold-level CSV evidence and a cross-validation score figure
+- Confusion-matrix image for the deterministic holdout
 - CLI with explicit split parameters
 - Atomic JSON, CSV, and PNG artifact replacement
 - Focused tests and GitHub Actions for Python 3.10 through 3.14
@@ -89,15 +93,17 @@ python examples/run_demo.py --verify-only
 ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
                                          [--random-state INTEGER]
                                          [--test-size FRACTION]
+                                         [--cv-folds INTEGER]
 ```
 
-The documented v0.1 command is:
+The documented v0.2 command is:
 
 ```bash
 ml-evaluation-workbench evaluate data/penguins.csv \
   --output-dir results \
   --random-state 42 \
-  --test-size 0.25
+  --test-size 0.25 \
+  --cv-folds 5
 ```
 
 Expected summary:
@@ -109,9 +115,14 @@ Test rows: 86
 Dummy accuracy: 0.442
 Logistic regression accuracy: 0.942
 Logistic regression macro F1: 0.924
+Cross-validation folds: 5
+Logistic regression CV macro F1 mean: 0.928
+Logistic regression CV macro F1 std: 0.041
 Metrics: results/metrics.json
 Predictions: results/predictions.csv
 Confusion matrix: results/confusion_matrix.png
+Cross-validation fold scores: results/cross_validation_folds.csv
+Cross-validation scores: results/cross_validation_scores.png
 ```
 
 ## Dataset
@@ -126,7 +137,7 @@ columns. The data are available under CC0 1.0.
 
 Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
 sex, body mass, flipper length, and observation year are intentionally excluded
-from v0.1. This keeps the question interpretable and avoids relying on
+from v0.2. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
@@ -139,11 +150,16 @@ easy.
 5. Train a majority-class dummy baseline and logistic regression using
    equivalent input rows.
 6. Evaluate both models on the untouched holdout partition.
-7. Save aggregate metrics, sorted row-level predictions, and the logistic
-   regression confusion matrix.
+7. Run five-fold stratified cross-validation, using the same shuffled folds
+   for both models and refitting each complete pipeline inside every fold.
+8. Summarize each metric with its mean, population standard deviation,
+   minimum, and maximum across the five observed folds.
+9. Save aggregate metrics, fold-level scores, sorted holdout predictions, and
+   both evaluation figures.
 
 The preprocessing steps are part of each scikit-learn `Pipeline`, so their
-statistics are not estimated from the holdout partition.
+statistics are not estimated from the holdout partition or a fold's validation
+partition.
 
 ## Output Schema
 
@@ -155,6 +171,10 @@ statistics are not estimated from the holdout partition.
 - split strategy, seed, fraction, and train/test row counts
 - accuracy, balanced accuracy, macro F1, and per-class recall for each model
 - metric gains from dummy baseline to logistic regression
+- cross-validation strategy and fold count
+- per-model cross-validation mean, population standard deviation, minimum, and
+  maximum
+- paired fold-level gains from the dummy model to logistic regression
 
 `predictions.csv` contains:
 
@@ -163,8 +183,13 @@ statistics are not estimated from the holdout partition.
 - dummy and logistic-regression predictions
 - correctness flags for each model
 
+`cross_validation_folds.csv` contains one row per model and fold, including
+train and validation row counts, the three aggregate metrics, and per-class
+recall.
+
 `confusion_matrix.png` visualizes the logistic-regression holdout errors.
-`checksums.sha256` fixes the bytes of all three reference artifacts.
+`cross_validation_scores.png` shows both models' three aggregate scores in
+each fold. `checksums.sha256` fixes the bytes of all five reference artifacts.
 
 ## Evaluation
 
@@ -179,12 +204,27 @@ errors occur between Chinstrap and the other species in this split.
 
 ![Logistic regression confusion matrix](results/confusion_matrix.png)
 
+### Five-Fold Cross-Validation
+
+| Model | Accuracy, mean ± std | Balanced Accuracy, mean ± std | Macro F1, mean ± std |
+| --- | ---: | ---: | ---: |
+| Majority-class dummy | 0.442 ± 0.006 | 0.333 ± 0.000 | 0.204 ± 0.002 |
+| Logistic regression | 0.945 ± 0.034 | 0.924 ± 0.043 | 0.928 ± 0.041 |
+
+Logistic-regression macro F1 ranges from 0.857 to 0.981 across the five folds.
+The mean paired macro-F1 gain over the dummy baseline is 0.724. These fold
+scores show that the improvement is present in every observed split while
+also exposing meaningful split-to-split variation.
+
+![Cross-validation fold scores](results/cross_validation_scores.png)
+
 See [results/README.md](results/README.md) for interpretation and the boundary
 between this controlled result and a general performance claim.
 
 ## Limitations
 
-- Version 0.1.0 evaluates one small dataset with one stratified random split.
+- Version 0.2.0 evaluates one small dataset with one deterministic holdout and
+  one five-fold stratified cross-validation run.
 - A random row split does not measure transfer across islands, years, field
   conditions, or independent collection programs.
 - The simplified dataset does not provide a grouping identifier suitable for
@@ -195,6 +235,11 @@ between this controlled result and a general performance claim.
   an optimal feature set.
 - The dummy and logistic models are baselines, not a comprehensive model
   comparison.
+- The five fold scores are correlated because their training partitions
+  overlap. Their standard deviation is descriptive and is not a confidence
+  interval.
+- One shuffled cross-validation partition does not measure sensitivity to
+  alternative partition seeds.
 - The committed score is specific to this dataset revision, split, feature
   selection, preprocessing, and dependency behavior.
 - Species labels and measurements are treated as given; label uncertainty and
@@ -217,6 +262,8 @@ ml-evaluation-workbench/
 │   ├── README.md
 │   ├── checksums.sha256
 │   ├── confusion_matrix.png
+│   ├── cross_validation_folds.csv
+│   ├── cross_validation_scores.png
 │   ├── metrics.json
 │   └── predictions.csv
 ├── src/ml_evaluation_workbench/
@@ -237,7 +284,7 @@ ml-evaluation-workbench/
 
 ## Roadmap
 
-- **v0.2:** Stratified cross-validation and fold-level evidence
+- **v0.2 (current):** Stratified cross-validation and fold-level evidence
 - **v0.3:** Controlled model comparison
 - **v0.4:** Feature ablation and leakage diagnostics
 - **v0.5:** Probability calibration

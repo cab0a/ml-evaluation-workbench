@@ -4,18 +4,18 @@ from pathlib import Path
 
 import pytest
 
-from examples.run_demo import _verify_manifest
+from examples.run_demo import ARTIFACT_NAMES, _verify_manifest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_committed_reference_artifacts_match_manifest() -> None:
-    assert _verify_manifest(ROOT / "results") == 3
+    assert _verify_manifest(ROOT / "results") == 5
 
 
 def test_manifest_detects_changed_artifact(tmp_path: Path) -> None:
-    for name in ("confusion_matrix.png", "metrics.json", "predictions.csv"):
+    for name in ARTIFACT_NAMES:
         (tmp_path / name).write_bytes((ROOT / "results" / name).read_bytes())
     (tmp_path / "checksums.sha256").write_bytes(
         (ROOT / "results" / "checksums.sha256").read_bytes()

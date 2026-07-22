@@ -11,7 +11,7 @@ penguins from three species observed in the Palmer Archipelago, Antarctica.
 - SHA-256: `f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93`
 - Data license: [CC0 1.0 Universal](https://allisonhorst.github.io/palmerpenguins/LICENSE.html)
 
-The dataset is committed so the v0.1 evaluation can run without a network
+The dataset is committed so the v0.2 evaluation can run without a network
 request. Regenerate it from the pinned source with:
 
 ```bash

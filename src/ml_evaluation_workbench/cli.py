@@ -10,7 +10,13 @@ from typing import Sequence
 from . import __version__
 from .dataset import load_dataset, sha256_file
 from .evaluation import evaluate_dataset
-from .reporting import write_confusion_matrix, write_json, write_predictions
+from .reporting import (
+    write_confusion_matrix,
+    write_cross_validation_scores,
+    write_csv,
+    write_json,
+    write_predictions,
+)
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
@@ -21,6 +27,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         frame,
         random_state=args.random_state,
         test_size=args.test_size,
+        cv_folds=args.cv_folds,
     )
     dataset_summary = result.metrics["dataset"]
     result.metrics = {
@@ -34,6 +41,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "split": result.metrics["split"],
         "models": result.metrics["models"],
         "comparison": result.metrics["comparison"],
+        "cross_validation": result.metrics["cross_validation"],
     }
 
     metrics_path = write_json(output_dir / "metrics.json", result.metrics)
@@ -46,18 +54,40 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         result.confusion,
         result.labels,
     )
+    cross_validation_path = write_csv(
+        output_dir / "cross_validation_folds.csv",
+        result.cross_validation_folds,
+    )
+    cross_validation_plot_path = write_cross_validation_scores(
+        output_dir / "cross_validation_scores.png",
+        result.cross_validation_folds,
+    )
 
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
+    cv_logistic = result.metrics["cross_validation"]["models"][
+        "logistic_regression"
+    ]
     print(f"Dataset rows: {result.metrics['dataset']['rows']}")
     print(f"Training rows: {result.metrics['split']['train_rows']}")
     print(f"Test rows: {result.metrics['split']['test_rows']}")
     print(f"Dummy accuracy: {dummy['accuracy']:.3f}")
     print(f"Logistic regression accuracy: {logistic['accuracy']:.3f}")
     print(f"Logistic regression macro F1: {logistic['macro_f1']:.3f}")
+    print(f"Cross-validation folds: {args.cv_folds}")
+    print(
+        "Logistic regression CV macro F1 mean: "
+        f"{cv_logistic['macro_f1']['mean']:.3f}"
+    )
+    print(
+        "Logistic regression CV macro F1 std: "
+        f"{cv_logistic['macro_f1']['std']:.3f}"
+    )
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
     print(f"Confusion matrix: {confusion_path}")
+    print(f"Cross-validation fold scores: {cross_validation_path}")
+    print(f"Cross-validation scores: {cross_validation_plot_path}")
     return 0
 
 
@@ -82,13 +112,19 @@ def build_parser() -> argparse.ArgumentParser:
         "--random-state",
         type=int,
         default=42,
-        help="Holdout split seed (default: 42)",
+        help="Holdout and cross-validation split seed (default: 42)",
     )
     evaluate_parser.add_argument(
         "--test-size",
         type=float,
         default=0.25,
         help="Holdout fraction (default: 0.25)",
+    )
+    evaluate_parser.add_argument(
+        "--cv-folds",
+        type=int,
+        default=5,
+        help="Number of stratified cross-validation folds (default: 5)",
     )
     evaluate_parser.set_defaults(handler=_cmd_evaluate)
     return parser

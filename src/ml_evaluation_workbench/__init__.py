@@ -1,4 +1,4 @@
-"""Reproducible machine-learning baseline evaluation."""
+"""Reproducible machine-learning baseline and variability evaluation."""
 
 from .dataset import (
     DATASET_SHA256,
@@ -22,4 +22,4 @@ __all__ = [
     "verify_dataset",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

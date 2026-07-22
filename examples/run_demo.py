@@ -1,4 +1,4 @@
-"""Regenerate or verify the committed v0.1 evaluation artifacts."""
+"""Regenerate or verify the committed v0.2 evaluation artifacts."""
 
 from __future__ import annotations
 
@@ -13,7 +13,13 @@ from ml_evaluation_workbench.cli import main as workbench_main
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ARTIFACT_NAMES = ("confusion_matrix.png", "metrics.json", "predictions.csv")
+ARTIFACT_NAMES = (
+    "confusion_matrix.png",
+    "cross_validation_folds.csv",
+    "cross_validation_scores.png",
+    "metrics.json",
+    "predictions.csv",
+)
 MANIFEST_NAME = "checksums.sha256"
 
 
@@ -92,6 +98,8 @@ def main() -> int:
             "42",
             "--test-size",
             "0.25",
+            "--cv-folds",
+            "5",
         ]
     )
     if status != 0:
@@ -112,6 +120,19 @@ def main() -> int:
         <= metrics["models"]["dummy"]["macro_f1"]
     ):
         raise SystemExit("Logistic regression did not exceed the dummy baseline")
+    cross_validation = metrics["cross_validation"]
+    if cross_validation["folds"] != 5:
+        raise SystemExit(
+            "Cross-validation fold mismatch: "
+            f"expected 5, got {cross_validation['folds']}"
+        )
+    if (
+        cross_validation["models"]["logistic_regression"]["macro_f1"]["mean"]
+        <= cross_validation["models"]["dummy"]["macro_f1"]["mean"]
+    ):
+        raise SystemExit(
+            "Logistic regression did not exceed the cross-validation baseline"
+        )
     manifest = _write_manifest(args.output_dir)
     print(f"Checksums: {manifest}")
     return 0

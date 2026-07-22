@@ -1,6 +1,6 @@
 {
-  "report_version": 1,
-  "project_version": "0.1.0",
+  "report_version": 2,
+  "project_version": "0.2.0",
   "dataset": {
     "source": "data/penguins.csv",
     "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
@@ -50,5 +50,74 @@
     "accuracy_gain": 0.5,
     "balanced_accuracy_gain": 0.586338,
     "macro_f1_gain": 0.71936
+  },
+  "cross_validation": {
+    "strategy": "stratified_k_fold",
+    "folds": 5,
+    "shuffle": true,
+    "random_state": 42,
+    "standard_deviation": "population_across_folds",
+    "models": {
+      "dummy": {
+        "accuracy": {
+          "mean": 0.441858,
+          "std": 0.00649,
+          "min": 0.434783,
+          "max": 0.449275
+        },
+        "balanced_accuracy": {
+          "mean": 0.333333,
+          "std": 0.0,
+          "min": 0.333333,
+          "max": 0.333333
+        },
+        "macro_f1": {
+          "mean": 0.204291,
+          "std": 0.002081,
+          "min": 0.20202,
+          "max": 0.206667
+        }
+      },
+      "logistic_regression": {
+        "accuracy": {
+          "mean": 0.9448,
+          "std": 0.03351,
+          "min": 0.884058,
+          "max": 0.985507
+        },
+        "balanced_accuracy": {
+          "mean": 0.923659,
+          "std": 0.043207,
+          "min": 0.858095,
+          "max": 0.986111
+        },
+        "macro_f1": {
+          "mean": 0.928288,
+          "std": 0.041342,
+          "min": 0.856905,
+          "max": 0.981414
+        }
+      }
+    },
+    "paired_gain": {
+      "accuracy": {
+        "mean": 0.502941,
+        "std": 0.030278,
+        "min": 0.449275,
+        "max": 0.536232
+      },
+      "balanced_accuracy": {
+        "mean": 0.590326,
+        "std": 0.043207,
+        "min": 0.524762,
+        "max": 0.652778
+      },
+      "macro_f1": {
+        "mean": 0.723996,
+        "std": 0.04034,
+        "min": 0.654885,
+        "max": 0.774747
+      }
+    }
   }
 }
