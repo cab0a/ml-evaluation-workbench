@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.4.0] - 2026-07-23
+
+### Added
+
+- Shared-fold feature ablation for bill length only, bill depth only, and both
+  measurements across logistic regression and KNN
+- Fold-level and summary ablation CSV artifacts with paired differences from
+  the two-feature reference
+- Feature-ablation macro-F1 visualization
+- Train/validation overlap, validation coverage, and partition-size checks
+- Within-fold shuffled-training-label negative control with observed-versus-
+  shuffled score differences
+- Focused leakage-diagnostic JSON and fold-level CSV artifacts
+
+### Changed
+
+- Evaluation report schema updated to version 4
+- Reproduction manifest expanded to eleven reference artifacts
+- Documentation expanded with diagnostic limitations and a non-causal
+  interpretation boundary
+
 ## [0.3.0] - 2026-07-23
 
 ### Added

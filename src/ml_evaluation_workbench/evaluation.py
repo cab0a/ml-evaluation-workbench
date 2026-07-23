@@ -41,6 +41,13 @@ COMPARISON_PAIRS = (
     ("knn", "dummy"),
     ("knn", "logistic_regression"),
 )
+DIAGNOSTIC_MODEL_NAMES = ("logistic_regression", "knn")
+FEATURE_SETS = {
+    "bill_length_only": ("bill_length_mm",),
+    "bill_depth_only": ("bill_depth_mm",),
+    "both_bill_measurements": FEATURES,
+}
+REFERENCE_FEATURE_SET = "both_bill_measurements"
 
 
 @dataclass(slots=True)
@@ -49,6 +56,10 @@ class EvaluationResult:
     predictions: pd.DataFrame
     cross_validation_folds: pd.DataFrame
     model_comparison: pd.DataFrame
+    feature_ablation_folds: pd.DataFrame
+    feature_ablation_summary: pd.DataFrame
+    leakage_diagnostic_folds: pd.DataFrame
+    leakage_diagnostics: dict[str, Any]
     confusion: np.ndarray
     labels: tuple[str, ...]
 
@@ -142,13 +153,12 @@ def _score_summary(values: pd.Series) -> dict[str, float]:
     }
 
 
-def _cross_validate(
+def _stratified_splits(
     frame: pd.DataFrame,
     *,
-    labels: tuple[str, ...],
     random_state: int,
     cv_folds: int,
-) -> tuple[pd.DataFrame, dict[str, Any]]:
+) -> tuple[tuple[np.ndarray, np.ndarray], ...]:
     splitter = StratifiedKFold(
         n_splits=cv_folds,
         shuffle=True,
@@ -156,10 +166,22 @@ def _cross_validate(
     )
     features = frame[list(FEATURES)]
     target = frame[TARGET]
+    return tuple(splitter.split(features, target))
+
+
+def _cross_validate(
+    frame: pd.DataFrame,
+    *,
+    labels: tuple[str, ...],
+    random_state: int,
+    splits: tuple[tuple[np.ndarray, np.ndarray], ...],
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    features = frame[list(FEATURES)]
+    target = frame[TARGET]
     rows: list[dict[str, Any]] = []
 
     for fold, (train_indices, validation_indices) in enumerate(
-        splitter.split(features, target),
+        splits,
         start=1,
     ):
         for model_name, model in _models(random_state).items():
@@ -213,7 +235,7 @@ def _cross_validate(
 
     summary = {
         "strategy": "stratified_k_fold",
-        "folds": cv_folds,
+        "folds": len(splits),
         "shuffle": True,
         "random_state": random_state,
         "standard_deviation": "population_across_folds",
@@ -262,6 +284,236 @@ def _model_comparison_table(
     return pd.DataFrame(rows)
 
 
+def _feature_ablation(
+    frame: pd.DataFrame,
+    *,
+    labels: tuple[str, ...],
+    random_state: int,
+    splits: tuple[tuple[np.ndarray, np.ndarray], ...],
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    target = frame[TARGET]
+    rows: list[dict[str, Any]] = []
+    for feature_set, feature_names in FEATURE_SETS.items():
+        features = frame[list(feature_names)]
+        for fold, (train_indices, validation_indices) in enumerate(
+            splits,
+            start=1,
+        ):
+            for model_name in DIAGNOSTIC_MODEL_NAMES:
+                model = _models(random_state)[model_name]
+                model.fit(
+                    features.iloc[train_indices],
+                    target.iloc[train_indices],
+                )
+                predicted = model.predict(features.iloc[validation_indices])
+                scores = _model_metrics(
+                    target.iloc[validation_indices],
+                    predicted,
+                    labels,
+                )
+                row: dict[str, Any] = {
+                    "feature_set": feature_set,
+                    "features": "|".join(feature_names),
+                    "fold": fold,
+                    "model": model_name,
+                    "train_rows": len(train_indices),
+                    "validation_rows": len(validation_indices),
+                    **{
+                        score_name: scores[score_name]
+                        for score_name in SCORE_NAMES
+                    },
+                }
+                row.update(
+                    {
+                        f"recall_{label.lower()}": value
+                        for label, value in scores[
+                            "per_class_recall"
+                        ].items()
+                    }
+                )
+                rows.append(row)
+
+    fold_scores = pd.DataFrame(rows)
+    summary_rows: list[dict[str, Any]] = []
+    feature_set_metrics: dict[str, Any] = {}
+    for feature_set, feature_names in FEATURE_SETS.items():
+        feature_set_metrics[feature_set] = {
+            "features": list(feature_names),
+            "models": {},
+        }
+        for model_name in DIAGNOSTIC_MODEL_NAMES:
+            model_rows = fold_scores[
+                (fold_scores["feature_set"] == feature_set)
+                & (fold_scores["model"] == model_name)
+            ].set_index("fold")
+            reference_rows = fold_scores[
+                (fold_scores["feature_set"] == REFERENCE_FEATURE_SET)
+                & (fold_scores["model"] == model_name)
+            ].set_index("fold")
+            score_metrics: dict[str, Any] = {}
+            summary_row: dict[str, Any] = {
+                "feature_set": feature_set,
+                "features": "|".join(feature_names),
+                "model": model_name,
+            }
+            for score_name in SCORE_NAMES:
+                score_summary = _score_summary(model_rows[score_name])
+                paired_difference = _score_summary(
+                    model_rows[score_name] - reference_rows[score_name]
+                )
+                score_metrics[score_name] = {
+                    **score_summary,
+                    "paired_difference_vs_both": paired_difference,
+                }
+                summary_row[f"{score_name}_mean"] = score_summary["mean"]
+                summary_row[f"{score_name}_std"] = score_summary["std"]
+                summary_row[
+                    f"{score_name}_difference_vs_both_mean"
+                ] = paired_difference["mean"]
+            feature_set_metrics[feature_set]["models"][
+                model_name
+            ] = score_metrics
+            summary_rows.append(summary_row)
+
+    summary = {
+        "strategy": "shared_stratified_k_fold",
+        "folds": len(splits),
+        "models": list(DIAGNOSTIC_MODEL_NAMES),
+        "reference_feature_set": REFERENCE_FEATURE_SET,
+        "selection_policy": "diagnostic_only_no_model_selection",
+        "feature_sets": feature_set_metrics,
+    }
+    return fold_scores, pd.DataFrame(summary_rows), summary
+
+
+def _leakage_diagnostics(
+    frame: pd.DataFrame,
+    *,
+    labels: tuple[str, ...],
+    random_state: int,
+    splits: tuple[tuple[np.ndarray, np.ndarray], ...],
+    observed_fold_scores: pd.DataFrame,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    features = frame[list(FEATURES)]
+    target = frame[TARGET]
+    validation_coverage = np.zeros(len(frame), dtype=int)
+    rows: list[dict[str, Any]] = []
+    partition_rows: list[dict[str, int]] = []
+
+    for fold, (train_indices, validation_indices) in enumerate(
+        splits,
+        start=1,
+    ):
+        overlap_rows = int(
+            np.intersect1d(train_indices, validation_indices).size
+        )
+        validation_coverage[validation_indices] += 1
+        partition_rows.append(
+            {
+                "fold": fold,
+                "train_rows": len(train_indices),
+                "validation_rows": len(validation_indices),
+                "train_validation_overlap_rows": overlap_rows,
+            }
+        )
+        shuffled_target = target.iloc[train_indices].to_numpy(copy=True)
+        rng = np.random.default_rng(random_state + fold)
+        rng.shuffle(shuffled_target)
+
+        for model_name in DIAGNOSTIC_MODEL_NAMES:
+            model = _models(random_state)[model_name]
+            model.fit(features.iloc[train_indices], shuffled_target)
+            predicted = model.predict(features.iloc[validation_indices])
+            shuffled_scores = _model_metrics(
+                target.iloc[validation_indices],
+                predicted,
+                labels,
+            )
+            observed_row = observed_fold_scores[
+                (observed_fold_scores["fold"] == fold)
+                & (observed_fold_scores["model"] == model_name)
+            ].iloc[0]
+            row: dict[str, Any] = {
+                "fold": fold,
+                "model": model_name,
+                "train_rows": len(train_indices),
+                "validation_rows": len(validation_indices),
+                "train_validation_overlap_rows": overlap_rows,
+            }
+            for score_name in SCORE_NAMES:
+                shuffled_value = shuffled_scores[score_name]
+                observed_value = float(observed_row[score_name])
+                row[f"shuffled_{score_name}"] = shuffled_value
+                row[f"observed_{score_name}"] = observed_value
+                row[
+                    f"observed_minus_shuffled_{score_name}"
+                ] = round(observed_value - shuffled_value, 6)
+            row.update(
+                {
+                    f"shuffled_recall_{label.lower()}": value
+                    for label, value in shuffled_scores[
+                        "per_class_recall"
+                    ].items()
+                }
+            )
+            rows.append(row)
+
+    diagnostic_folds = pd.DataFrame(rows)
+    model_summaries: dict[str, Any] = {}
+    for model_name in DIAGNOSTIC_MODEL_NAMES:
+        model_rows = diagnostic_folds[
+            diagnostic_folds["model"] == model_name
+        ]
+        model_summaries[model_name] = {
+            score_name: {
+                "shuffled": _score_summary(
+                    model_rows[f"shuffled_{score_name}"]
+                ),
+                "observed_minus_shuffled": _score_summary(
+                    model_rows[
+                        f"observed_minus_shuffled_{score_name}"
+                    ]
+                ),
+            }
+            for score_name in SCORE_NAMES
+        }
+
+    maximum_overlap = max(
+        row["train_validation_overlap_rows"] for row in partition_rows
+    )
+    coverage_minimum = int(validation_coverage.min())
+    coverage_maximum = int(validation_coverage.max())
+    all_rows_partitioned = all(
+        row["train_rows"] + row["validation_rows"] == len(frame)
+        for row in partition_rows
+    )
+    split_integrity_passed = (
+        maximum_overlap == 0
+        and coverage_minimum == 1
+        and coverage_maximum == 1
+        and all_rows_partitioned
+    )
+    diagnostics = {
+        "interpretation": "negative_control_not_proof_of_no_leakage",
+        "preprocessing_fit_scope": "training_partition_pipeline",
+        "split_integrity": {
+            "passed": split_integrity_passed,
+            "folds": partition_rows,
+            "maximum_train_validation_overlap_rows": maximum_overlap,
+            "validation_coverage_minimum": coverage_minimum,
+            "validation_coverage_maximum": coverage_maximum,
+            "all_rows_partitioned_per_fold": all_rows_partitioned,
+        },
+        "shuffled_training_labels": {
+            "scope": "within_each_training_fold",
+            "seed_rule": "random_state_plus_fold_number",
+            "validation_labels": "unchanged",
+            "models": model_summaries,
+        },
+    }
+    return diagnostic_folds, diagnostics
+
+
 def evaluate_dataset(
     frame: pd.DataFrame,
     *,
@@ -288,11 +540,33 @@ def evaluate_dataset(
         )
 
     labels = tuple(sorted(str(value) for value in frame[TARGET].unique()))
+    splits = _stratified_splits(
+        frame,
+        random_state=random_state,
+        cv_folds=cv_folds,
+    )
     cross_validation_folds, cross_validation_summary = _cross_validate(
         frame,
         labels=labels,
         random_state=random_state,
-        cv_folds=cv_folds,
+        splits=splits,
+    )
+    (
+        feature_ablation_folds,
+        feature_ablation_summary,
+        feature_ablation_metrics,
+    ) = _feature_ablation(
+        frame,
+        labels=labels,
+        random_state=random_state,
+        splits=splits,
+    )
+    leakage_diagnostic_folds, leakage_diagnostics = _leakage_diagnostics(
+        frame,
+        labels=labels,
+        random_state=random_state,
+        splits=splits,
+        observed_fold_scores=cross_validation_folds,
     )
     indices = np.arange(len(frame))
     train_indices, test_indices = train_test_split(
@@ -357,7 +631,7 @@ def evaluate_dataset(
         cross_validation_summary,
     )
     metrics = {
-        "report_version": 3,
+        "report_version": 4,
         "dataset": {
             "rows": len(frame),
             "target": TARGET,
@@ -380,12 +654,18 @@ def evaluate_dataset(
             "holdout_gain": holdout_gains,
         },
         "cross_validation": cross_validation_summary,
+        "feature_ablation": feature_ablation_metrics,
+        "leakage_diagnostics": leakage_diagnostics,
     }
     return EvaluationResult(
         metrics=metrics,
         predictions=prediction_rows,
         cross_validation_folds=cross_validation_folds,
         model_comparison=model_comparison,
+        feature_ablation_folds=feature_ablation_folds,
+        feature_ablation_summary=feature_ablation_summary,
+        leakage_diagnostic_folds=leakage_diagnostic_folds,
+        leakage_diagnostics=leakage_diagnostics,
         confusion=logistic_confusion,
         labels=labels,
     )

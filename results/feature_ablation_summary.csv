@@ -1,0 +1,7 @@
+feature_set,features,model,accuracy_mean,accuracy_std,accuracy_difference_vs_both_mean,balanced_accuracy_mean,balanced_accuracy_std,balanced_accuracy_difference_vs_both_mean,macro_f1_mean,macro_f1_std,macro_f1_difference_vs_both_mean
+bill_length_only,bill_length_mm,logistic_regression,0.744288,0.022538,-0.200512,0.622724,0.011612,-0.300936,0.574987,0.012112,-0.3533
+bill_length_only,bill_length_mm,knn,0.732822,0.04977,-0.226471,0.653446,0.061832,-0.294383,0.647485,0.072626,-0.301627
+bill_depth_only,bill_depth_mm,logistic_regression,0.755754,0.031414,-0.189045,0.627516,0.024334,-0.296143,0.5689,0.024325,-0.359387
+bill_depth_only,bill_depth_mm,knn,0.741176,0.050273,-0.218116,0.6644,0.042212,-0.283428,0.664812,0.049604,-0.2843
+both_bill_measurements,bill_length_mm|bill_depth_mm,logistic_regression,0.9448,0.03351,0.0,0.923659,0.043207,0.0,0.928288,0.041342,0.0
+both_bill_measurements,bill_length_mm|bill_depth_mm,knn,0.959292,0.010882,0.0,0.947829,0.022578,0.0,0.949112,0.017756,0.0

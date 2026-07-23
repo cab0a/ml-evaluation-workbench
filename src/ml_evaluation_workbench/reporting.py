@@ -190,3 +190,74 @@ def write_cross_validation_scores(
     finally:
         plt.close(figure)
     return destination
+
+
+def write_feature_ablation_scores(
+    path: str | Path,
+    frame: pd.DataFrame,
+) -> Path:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    feature_sets = (
+        "bill_length_only",
+        "bill_depth_only",
+        "both_bill_measurements",
+    )
+    feature_labels = ("Bill length", "Bill depth", "Both")
+    model_styles = {
+        "logistic_regression": ("Logistic regression", "#2563eb"),
+        "knn": ("5-nearest neighbors", "#059669"),
+    }
+    positions = np.arange(len(feature_sets), dtype=float)
+    width = 0.36
+    figure, axis = plt.subplots(figsize=(8.0, 5.0), dpi=120)
+    try:
+        for offset, (model_name, (label, color)) in zip(
+            (-width / 2.0, width / 2.0),
+            model_styles.items(),
+            strict=True,
+        ):
+            model_rows = frame.set_index(
+                ["feature_set", "model"]
+            ).loc[
+                [(feature_set, model_name) for feature_set in feature_sets]
+            ]
+            axis.bar(
+                positions + offset,
+                model_rows["macro_f1_mean"],
+                width=width,
+                yerr=model_rows["macro_f1_std"],
+                capsize=4,
+                color=color,
+                label=label,
+            )
+        axis.set_title("Feature Ablation under Shared Cross-Validation Folds")
+        axis.set_xlabel("Feature set")
+        axis.set_ylabel("Macro F1, mean ± fold standard deviation")
+        axis.set_xticks(positions, labels=feature_labels)
+        axis.set_ylim(0.0, 1.02)
+        axis.grid(axis="y", alpha=0.25)
+        axis.legend(loc="lower right")
+        figure.tight_layout()
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".png",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        figure.savefig(
+            temporary,
+            format="png",
+            metadata={"Software": "ml-evaluation-workbench"},
+        )
+        os.replace(temporary, destination)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+    finally:
+        plt.close(figure)
+    return destination

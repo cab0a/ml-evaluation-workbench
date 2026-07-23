@@ -1,4 +1,4 @@
-"""Command-line interface for reproducible baseline evaluation."""
+"""Command-line interface for reproducible evaluation and diagnostics."""
 
 from __future__ import annotations
 
@@ -14,6 +14,7 @@ from .reporting import (
     write_confusion_matrix,
     write_cross_validation_scores,
     write_csv,
+    write_feature_ablation_scores,
     write_json,
     write_predictions,
 )
@@ -42,6 +43,8 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "models": result.metrics["models"],
         "comparison": result.metrics["comparison"],
         "cross_validation": result.metrics["cross_validation"],
+        "feature_ablation": result.metrics["feature_ablation"],
+        "leakage_diagnostics": result.metrics["leakage_diagnostics"],
     }
 
     metrics_path = write_json(output_dir / "metrics.json", result.metrics)
@@ -66,6 +69,26 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         output_dir / "model_comparison.csv",
         result.model_comparison,
     )
+    feature_ablation_folds_path = write_csv(
+        output_dir / "feature_ablation_folds.csv",
+        result.feature_ablation_folds,
+    )
+    feature_ablation_summary_path = write_csv(
+        output_dir / "feature_ablation_summary.csv",
+        result.feature_ablation_summary,
+    )
+    feature_ablation_plot_path = write_feature_ablation_scores(
+        output_dir / "feature_ablation_scores.png",
+        result.feature_ablation_summary,
+    )
+    leakage_folds_path = write_csv(
+        output_dir / "leakage_diagnostic_folds.csv",
+        result.leakage_diagnostic_folds,
+    )
+    leakage_diagnostics_path = write_json(
+        output_dir / "leakage_diagnostics.json",
+        result.leakage_diagnostics,
+    )
 
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
@@ -74,6 +97,15 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "logistic_regression"
     ]
     cv_knn = result.metrics["cross_validation"]["models"]["knn"]
+    shuffled_models = result.metrics["leakage_diagnostics"][
+        "shuffled_training_labels"
+    ]["models"]
+    logistic_shuffled_macro_f1 = shuffled_models["logistic_regression"][
+        "macro_f1"
+    ]["shuffled"]["mean"]
+    knn_shuffled_macro_f1 = shuffled_models["knn"]["macro_f1"]["shuffled"][
+        "mean"
+    ]
     print(f"Dataset rows: {result.metrics['dataset']['rows']}")
     print(f"Training rows: {result.metrics['split']['train_rows']}")
     print(f"Test rows: {result.metrics['split']['test_rows']}")
@@ -99,19 +131,38 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "KNN CV macro F1 std: "
         f"{cv_knn['macro_f1']['std']:.3f}"
     )
+    print(
+        "Logistic regression shuffled-label macro F1 mean: "
+        f"{logistic_shuffled_macro_f1:.3f}"
+    )
+    print(
+        "KNN shuffled-label macro F1 mean: "
+        f"{knn_shuffled_macro_f1:.3f}"
+    )
+    split_status = (
+        "passed"
+        if result.leakage_diagnostics["split_integrity"]["passed"]
+        else "failed"
+    )
+    print(f"Split integrity check: {split_status}")
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
     print(f"Confusion matrix: {confusion_path}")
     print(f"Cross-validation fold scores: {cross_validation_path}")
     print(f"Cross-validation scores: {cross_validation_plot_path}")
     print(f"Model comparison: {model_comparison_path}")
+    print(f"Feature ablation folds: {feature_ablation_folds_path}")
+    print(f"Feature ablation summary: {feature_ablation_summary_path}")
+    print(f"Feature ablation scores: {feature_ablation_plot_path}")
+    print(f"Leakage diagnostic folds: {leakage_folds_path}")
+    print(f"Leakage diagnostics: {leakage_diagnostics_path}")
     return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="ml-evaluation-workbench",
-        description="Run deterministic machine-learning baseline evaluations.",
+        description="Run deterministic machine-learning evaluations.",
     )
     parser.add_argument("--version", action="version", version=__version__)
     commands = parser.add_subparsers(dest="command", required=True)

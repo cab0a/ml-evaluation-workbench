@@ -9,13 +9,12 @@ interpretation using public datasets.
 
 ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
 
-**Question → Baseline → Controlled Comparison → Evaluation → Error Review**
+**Question → Controlled Comparison → Ablation → Diagnostics → Interpretation**
 
-Version 0.3.0 asks a deliberately narrow question: how does a fixed local
-nonlinear classifier compare with a linear baseline when both use only bill
-length and bill depth to separate three Palmer penguin species? It evaluates a
-majority-class dummy, multinomial logistic regression, and 5-nearest neighbors
-under one deterministic holdout and five shared stratified folds.
+Version 0.4.0 asks whether bill length and bill depth provide complementary
+signal under the existing controlled comparison. It evaluates each feature
+alone and together on shared folds, audits split overlap and validation
+coverage, and runs a within-fold shuffled-training-label negative control.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
@@ -47,6 +46,10 @@ This project keeps those decisions explicit:
 - Logistic-regression classifier using two interpretable measurements
 - Fixed 5-nearest-neighbors nonlinear comparator without parameter tuning
 - Compact holdout and cross-validation model-comparison table
+- Three-way feature ablation on shared folds
+- Per-fold and summary ablation artifacts with paired differences
+- Train/validation overlap and validation-coverage diagnostics
+- Within-fold shuffled-training-label negative control
 - Accuracy, balanced accuracy, macro F1, and per-class recall
 - Cross-validation mean, population standard deviation, minimum, and maximum
 - Row-level holdout predictions with source-row references
@@ -98,7 +101,7 @@ ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
                                          [--cv-folds INTEGER]
 ```
 
-The documented v0.3 command is:
+The documented v0.4 command is:
 
 ```bash
 ml-evaluation-workbench evaluate data/penguins.csv \
@@ -124,12 +127,20 @@ Logistic regression CV macro F1 mean: 0.928
 Logistic regression CV macro F1 std: 0.041
 KNN CV macro F1 mean: 0.949
 KNN CV macro F1 std: 0.018
+Logistic regression shuffled-label macro F1 mean: 0.254
+KNN shuffled-label macro F1 mean: 0.298
+Split integrity check: passed
 Metrics: results/metrics.json
 Predictions: results/predictions.csv
 Confusion matrix: results/confusion_matrix.png
 Cross-validation fold scores: results/cross_validation_folds.csv
 Cross-validation scores: results/cross_validation_scores.png
 Model comparison: results/model_comparison.csv
+Feature ablation folds: results/feature_ablation_folds.csv
+Feature ablation summary: results/feature_ablation_summary.csv
+Feature ablation scores: results/feature_ablation_scores.png
+Leakage diagnostic folds: results/leakage_diagnostic_folds.csv
+Leakage diagnostics: results/leakage_diagnostics.json
 ```
 
 ## Dataset
@@ -144,7 +155,7 @@ columns. The data are available under CC0 1.0.
 
 Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
 sex, body mass, flipper length, and observation year are intentionally excluded
-from v0.3. This keeps the question interpretable and avoids relying on
+from v0.4. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
@@ -163,8 +174,14 @@ easy.
    for all models and refitting each complete pipeline inside every fold.
 9. Summarize each metric with its mean, population standard deviation,
    minimum, and maximum across the five observed folds.
-10. Save aggregate metrics, paired differences, fold-level scores, a compact
-    model-comparison table, sorted holdout predictions, and evaluation figures.
+10. Evaluate bill length alone, bill depth alone, and both measurements for
+    logistic regression and KNN on the same folds.
+11. Verify zero train/validation row overlap and exactly-once validation
+    coverage across the folds.
+12. Shuffle only the training labels inside each fold, refit both substantive
+    models, and compare the negative-control scores with observed scores.
+13. Save aggregate metrics, fold-level evidence, diagnostic summaries,
+    predictions, and evaluation figures.
 
 The preprocessing steps are part of each scikit-learn `Pipeline`, so their
 statistics are not estimated from the holdout partition or a fold's validation
@@ -186,6 +203,9 @@ partition.
 - per-model cross-validation mean, population standard deviation, minimum, and
   maximum
 - paired fold-level differences for all three controlled comparisons
+- feature-ablation configuration, summaries, and paired differences from the
+  two-feature reference
+- split-integrity checks and shuffled-training-label negative-control summaries
 
 `predictions.csv` contains:
 
@@ -201,9 +221,21 @@ recall.
 `model_comparison.csv` provides one compact row per model with its evaluation
 role, holdout metrics, and cross-validation means and standard deviations.
 
+`feature_ablation_folds.csv` records 30 model-feature-fold evaluations.
+`feature_ablation_summary.csv` provides one row per model and feature set,
+including paired mean differences from the two-feature reference.
+`feature_ablation_scores.png` visualizes macro F1 and observed fold
+variation.
+
+`leakage_diagnostic_folds.csv` records the observed and shuffled-label scores
+for each substantive model and fold. `leakage_diagnostics.json` records split
+integrity, validation coverage, negative-control summaries, and the diagnostic
+interpretation boundary.
+
 `confusion_matrix.png` visualizes the logistic-regression holdout errors.
 `cross_validation_scores.png` shows all three models' aggregate scores in
-each fold. `checksums.sha256` fixes the bytes of all six reference artifacts.
+each fold. `checksums.sha256` fixes the bytes of all eleven reference
+artifacts.
 
 ## Evaluation
 
@@ -240,12 +272,40 @@ nonlinear comparison, not universal KNN superiority.
 
 ![Cross-validation fold scores](results/cross_validation_scores.png)
 
+### Feature Ablation
+
+| Feature set | Logistic Macro F1 | KNN Macro F1 |
+| --- | ---: | ---: |
+| Bill length only | 0.575 ± 0.012 | 0.647 ± 0.073 |
+| Bill depth only | 0.569 ± 0.024 | 0.665 ± 0.050 |
+| Both measurements | 0.928 ± 0.041 | 0.949 ± 0.018 |
+
+Removing either measurement reduces mean macro F1 by at least 0.284 for KNN
+and 0.353 for logistic regression relative to the shared two-feature
+reference. Under these fixed models and folds, the measurements provide
+complementary predictive signal.
+
+![Feature-ablation macro F1](results/feature_ablation_scores.png)
+
+### Leakage Diagnostics
+
+- Maximum train/validation overlap: 0 rows
+- Validation coverage: exactly once for every row
+- Logistic-regression shuffled-label macro F1: 0.254 ± 0.052
+- KNN shuffled-label macro F1: 0.298 ± 0.054
+- Observed-minus-shuffled macro-F1 mean: 0.674 for logistic regression and
+  0.651 for KNN
+
+The negative-control scores are substantially below the observed scores. This
+is consistent with the models using the intended feature-label association,
+but it does not prove that every possible source of leakage is absent.
+
 See [results/README.md](results/README.md) for interpretation and the boundary
 between this controlled result and a general performance claim.
 
 ## Limitations
 
-- Version 0.3.0 evaluates one small dataset with one deterministic holdout and
+- Version 0.4.0 evaluates one small dataset with one deterministic holdout and
   one five-fold stratified cross-validation run.
 - A random row split does not measure transfer across islands, years, field
   conditions, or independent collection programs.
@@ -259,12 +319,16 @@ between this controlled result and a general performance claim.
   search.
 - The KNN configuration is chosen in advance and is not claimed to be optimal.
   Different neighbor counts, weights, or distance metrics are not evaluated.
+- Ablation differences are descriptive for the two selected measurements and
+  do not establish causal feature importance.
+- Reusing one cross-validation partition limits sensitivity analysis across
+  alternative split seeds.
+- Split-integrity checks and a shuffled-label negative control can reveal some
+  implementation failures but cannot prove the absence of all leakage.
 - The five fold scores are correlated because their training partitions
   overlap. Their standard deviation is descriptive and is not a confidence
   interval.
-- One shuffled cross-validation partition does not measure sensitivity to
-  alternative partition seeds.
-- The committed score is specific to this dataset revision, split, feature
+- The committed results are specific to this dataset revision, split, feature
   selection, preprocessing, and dependency behavior.
 - Species labels and measurements are treated as given; label uncertainty and
   measurement error are not modeled.
@@ -288,6 +352,11 @@ ml-evaluation-workbench/
 │   ├── confusion_matrix.png
 │   ├── cross_validation_folds.csv
 │   ├── cross_validation_scores.png
+│   ├── feature_ablation_folds.csv
+│   ├── feature_ablation_scores.png
+│   ├── feature_ablation_summary.csv
+│   ├── leakage_diagnostic_folds.csv
+│   ├── leakage_diagnostics.json
 │   ├── metrics.json
 │   ├── model_comparison.csv
 │   └── predictions.csv
@@ -310,8 +379,8 @@ ml-evaluation-workbench/
 ## Roadmap
 
 - **v0.2:** Stratified cross-validation and fold-level evidence
-- **v0.3 (current):** Controlled model comparison
-- **v0.4:** Feature ablation and leakage diagnostics
+- **v0.3:** Controlled model comparison
+- **v0.4 (current):** Feature ablation and leakage diagnostics
 - **v0.5:** Probability calibration
 - **v0.6:** Missing-value and noise robustness
 - **v0.7:** Class-imbalance sensitivity

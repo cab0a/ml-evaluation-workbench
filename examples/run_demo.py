@@ -1,4 +1,4 @@
-"""Regenerate or verify the committed v0.3 evaluation artifacts."""
+"""Regenerate or verify the committed v0.4 evaluation artifacts."""
 
 from __future__ import annotations
 
@@ -17,6 +17,11 @@ ARTIFACT_NAMES = (
     "confusion_matrix.png",
     "cross_validation_folds.csv",
     "cross_validation_scores.png",
+    "feature_ablation_folds.csv",
+    "feature_ablation_scores.png",
+    "feature_ablation_summary.csv",
+    "leakage_diagnostic_folds.csv",
+    "leakage_diagnostics.json",
     "metrics.json",
     "model_comparison.csv",
     "predictions.csv",
@@ -139,6 +144,30 @@ def main() -> int:
         <= cross_validation["models"]["dummy"]["macro_f1"]["mean"]
     ):
         raise SystemExit("KNN did not exceed the cross-validation baseline")
+    feature_ablation = metrics["feature_ablation"]
+    for model_name in ("logistic_regression", "knn"):
+        observed = cross_validation["models"][model_name]["macro_f1"]["mean"]
+        ablation_reference = feature_ablation["feature_sets"][
+            "both_bill_measurements"
+        ]["models"][model_name]["macro_f1"]["mean"]
+        if ablation_reference != observed:
+            raise SystemExit(
+                "Feature-ablation reference mismatch for "
+                f"{model_name}: expected {observed}, got {ablation_reference}"
+            )
+    leakage_diagnostics = metrics["leakage_diagnostics"]
+    if not leakage_diagnostics["split_integrity"]["passed"]:
+        raise SystemExit("Split-integrity diagnostics did not pass")
+    shuffled_models = leakage_diagnostics["shuffled_training_labels"][
+        "models"
+    ]
+    for model_name in ("logistic_regression", "knn"):
+        shuffled = shuffled_models[model_name]["macro_f1"]["shuffled"]["mean"]
+        observed = cross_validation["models"][model_name]["macro_f1"]["mean"]
+        if shuffled >= observed:
+            raise SystemExit(
+                f"Shuffled-label control did not reduce {model_name} macro F1"
+            )
     manifest = _write_manifest(args.output_dir)
     print(f"Checksums: {manifest}")
     return 0
