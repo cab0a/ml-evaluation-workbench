@@ -18,6 +18,7 @@ from sklearn.metrics import (
     recall_score,
 )
 from sklearn.model_selection import StratifiedKFold, train_test_split
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
@@ -29,7 +30,17 @@ NUMERIC_FEATURES = (
 FEATURES = NUMERIC_FEATURES
 TARGET = "species"
 SCORE_NAMES = ("accuracy", "balanced_accuracy", "macro_f1")
-MODEL_NAMES = ("dummy", "logistic_regression")
+MODEL_NAMES = ("dummy", "logistic_regression", "knn")
+MODEL_ROLES = {
+    "dummy": "reference_baseline",
+    "logistic_regression": "linear_baseline",
+    "knn": "nonlinear_comparator",
+}
+COMPARISON_PAIRS = (
+    ("logistic_regression", "dummy"),
+    ("knn", "dummy"),
+    ("knn", "logistic_regression"),
+)
 
 
 @dataclass(slots=True)
@@ -37,6 +48,7 @@ class EvaluationResult:
     metrics: dict[str, Any]
     predictions: pd.DataFrame
     cross_validation_folds: pd.DataFrame
+    model_comparison: pd.DataFrame
     confusion: np.ndarray
     labels: tuple[str, ...]
 
@@ -57,6 +69,39 @@ def _models(random_state: int) -> dict[str, Pipeline]:
         "logistic_regression": _pipeline(
             LogisticRegression(max_iter=1000, random_state=random_state)
         ),
+        "knn": _pipeline(
+            KNeighborsClassifier(
+                n_neighbors=5,
+                weights="uniform",
+                algorithm="auto",
+                leaf_size=30,
+                metric="minkowski",
+                p=2,
+            )
+        ),
+    }
+
+
+def _model_configurations(random_state: int) -> dict[str, dict[str, Any]]:
+    return {
+        "dummy": {
+            "classifier": "DummyClassifier",
+            "strategy": "most_frequent",
+        },
+        "logistic_regression": {
+            "classifier": "LogisticRegression",
+            "max_iter": 1000,
+            "random_state": random_state,
+        },
+        "knn": {
+            "classifier": "KNeighborsClassifier",
+            "n_neighbors": 5,
+            "weights": "uniform",
+            "algorithm": "auto",
+            "leaf_size": 30,
+            "metric": "minkowski",
+            "p": 2,
+        },
     }
 
 
@@ -143,11 +188,7 @@ def _cross_validate(
             )
             rows.append(row)
 
-    fold_scores = pd.DataFrame(rows).sort_values(
-        ["fold", "model"],
-        kind="stable",
-    )
-    fold_scores = fold_scores.reset_index(drop=True)
+    fold_scores = pd.DataFrame(rows)
     model_summaries: dict[str, dict[str, dict[str, float]]] = {}
     for model_name in MODEL_NAMES:
         model_rows = fold_scores[fold_scores["model"] == model_name]
@@ -156,16 +197,19 @@ def _cross_validate(
             for score_name in SCORE_NAMES
         }
 
-    paired_gains: dict[str, dict[str, float]] = {}
-    for score_name in SCORE_NAMES:
-        by_model = fold_scores.pivot(
-            index="fold",
-            columns="model",
-            values=score_name,
-        )
-        paired_gains[score_name] = _score_summary(
-            by_model["logistic_regression"] - by_model["dummy"]
-        )
+    paired_differences: dict[str, dict[str, dict[str, float]]] = {}
+    for left_model, right_model in COMPARISON_PAIRS:
+        comparison_name = f"{left_model}_minus_{right_model}"
+        paired_differences[comparison_name] = {}
+        for score_name in SCORE_NAMES:
+            by_model = fold_scores.pivot(
+                index="fold",
+                columns="model",
+                values=score_name,
+            )
+            paired_differences[comparison_name][score_name] = _score_summary(
+                by_model[left_model] - by_model[right_model]
+            )
 
     summary = {
         "strategy": "stratified_k_fold",
@@ -174,9 +218,48 @@ def _cross_validate(
         "random_state": random_state,
         "standard_deviation": "population_across_folds",
         "models": model_summaries,
-        "paired_gain": paired_gains,
+        "paired_difference": paired_differences,
     }
     return fold_scores, summary
+
+
+def _metric_differences(
+    left: dict[str, Any],
+    right: dict[str, Any],
+) -> dict[str, float]:
+    return {
+        score_name: round(left[score_name] - right[score_name], 6)
+        for score_name in SCORE_NAMES
+    }
+
+
+def _model_comparison_table(
+    model_metrics: dict[str, dict[str, Any]],
+    cross_validation: dict[str, Any],
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for model_name in MODEL_NAMES:
+        holdout = model_metrics[model_name]
+        cross_validation_scores = cross_validation["models"][model_name]
+        row: dict[str, Any] = {
+            "model": model_name,
+            "role": MODEL_ROLES[model_name],
+        }
+        row.update(
+            {
+                f"holdout_{score_name}": holdout[score_name]
+                for score_name in SCORE_NAMES
+            }
+        )
+        for score_name in SCORE_NAMES:
+            row[f"cv_{score_name}_mean"] = cross_validation_scores[
+                score_name
+            ]["mean"]
+            row[f"cv_{score_name}_std"] = cross_validation_scores[
+                score_name
+            ]["std"]
+        rows.append(row)
+    return pd.DataFrame(rows)
 
 
 def evaluate_dataset(
@@ -225,14 +308,18 @@ def evaluate_dataset(
 
     predicted: dict[str, np.ndarray] = {}
     model_metrics: dict[str, dict[str, Any]] = {}
+    model_configurations = _model_configurations(random_state)
     for name, model in _models(random_state).items():
         model.fit(features_train, target_train)
         predicted[name] = model.predict(features_test)
-        model_metrics[name] = _model_metrics(
-            target_test,
-            predicted[name],
-            labels,
-        )
+        model_metrics[name] = {
+            "configuration": model_configurations[name],
+            **_model_metrics(
+                target_test,
+                predicted[name],
+                labels,
+            ),
+        }
 
     logistic_confusion = confusion_matrix(
         target_test,
@@ -243,27 +330,34 @@ def evaluate_dataset(
         {
             "source_row": test_indices + 2,
             "actual": target_test.to_numpy(),
-            "dummy_prediction": predicted["dummy"],
-            "logistic_regression_prediction": predicted[
-                "logistic_regression"
-            ],
+            **{
+                f"{model_name}_prediction": predicted[model_name]
+                for model_name in MODEL_NAMES
+            },
         }
     )
-    prediction_rows["dummy_correct"] = (
-        prediction_rows["actual"] == prediction_rows["dummy_prediction"]
-    )
-    prediction_rows["logistic_regression_correct"] = (
-        prediction_rows["actual"]
-        == prediction_rows["logistic_regression_prediction"]
-    )
+    for model_name in MODEL_NAMES:
+        prediction_rows[f"{model_name}_correct"] = (
+            prediction_rows["actual"]
+            == prediction_rows[f"{model_name}_prediction"]
+        )
     prediction_rows = prediction_rows.sort_values("source_row").reset_index(
         drop=True
     )
 
-    dummy_metrics = model_metrics["dummy"]
-    logistic_metrics = model_metrics["logistic_regression"]
+    holdout_gains = {
+        f"{left_model}_minus_{right_model}": _metric_differences(
+            model_metrics[left_model],
+            model_metrics[right_model],
+        )
+        for left_model, right_model in COMPARISON_PAIRS
+    }
+    model_comparison = _model_comparison_table(
+        model_metrics,
+        cross_validation_summary,
+    )
     metrics = {
-        "report_version": 2,
+        "report_version": 3,
         "dataset": {
             "rows": len(frame),
             "target": TARGET,
@@ -282,18 +376,8 @@ def evaluate_dataset(
         },
         "models": model_metrics,
         "comparison": {
-            "accuracy_gain": round(
-                logistic_metrics["accuracy"] - dummy_metrics["accuracy"], 6
-            ),
-            "balanced_accuracy_gain": round(
-                logistic_metrics["balanced_accuracy"]
-                - dummy_metrics["balanced_accuracy"],
-                6,
-            ),
-            "macro_f1_gain": round(
-                logistic_metrics["macro_f1"] - dummy_metrics["macro_f1"],
-                6,
-            ),
+            "positive_difference_favors": "left_model",
+            "holdout_gain": holdout_gains,
         },
         "cross_validation": cross_validation_summary,
     }
@@ -301,6 +385,7 @@ def evaluate_dataset(
         metrics=metrics,
         predictions=prediction_rows,
         cross_validation_folds=cross_validation_folds,
+        model_comparison=model_comparison,
         confusion=logistic_confusion,
         labels=labels,
     )

@@ -1,11 +1,10 @@
-# Version 0.2 Evaluation Result
+# Version 0.3 Evaluation Result
 
 ## Question
 
-How much improvement over a majority-class baseline can a linear classifier
-provide when it uses only bill length and bill depth to separate the three
-species in the pinned Palmer Penguins dataset, and how much do its scores vary
-across five stratified folds?
+How does a fixed local nonlinear classifier compare with a linear baseline
+when both use only bill length and bill depth to separate the three species in
+the pinned Palmer Penguins dataset?
 
 ## Controlled Setup
 
@@ -15,34 +14,42 @@ across five stratified folds?
 - Holdout: stratified 75/25 split
 - Cross-validation: five stratified folds with shuffling
 - Random state: 42 for both evaluation paths
-- Holdout training rows: 258
-- Holdout test rows: 86
-- Fold training rows: 275 or 276
-- Fold validation rows: 68 or 69
 - Preprocessing: median imputation and standardization fitted inside each
   training partition
-- Baseline: most-frequent `DummyClassifier`
-- Prototype: `LogisticRegression` with a maximum of 1,000 iterations
+- Reference baseline: most-frequent `DummyClassifier`
+- Linear baseline: `LogisticRegression(max_iter=1000, random_state=42)`
+- Nonlinear comparator: `KNeighborsClassifier(n_neighbors=5,
+  weights="uniform", algorithm="auto", leaf_size=30, metric="minkowski",
+  p=2)`
 
-Both models use the same holdout and cross-validation partitions. Every
-cross-validation fold refits the full preprocessing and classifier pipeline.
+All three models use the same feature rows, holdout partition, and
+cross-validation folds. Every fold refits the complete preprocessing and
+classifier pipeline. The KNN configuration is fixed in advance; no score in
+this report is used for hyperparameter selection.
 
-## Holdout Summary
+## Holdout Comparison
 
 | Model | Accuracy | Balanced Accuracy | Macro F1 |
 | --- | ---: | ---: | ---: |
 | Majority-class dummy | 0.441860 | 0.333333 | 0.204301 |
 | Logistic regression | 0.941860 | 0.919671 | 0.923661 |
+| 5-nearest neighbors | 0.965116 | 0.958887 | 0.959670 |
 
-The dummy model predicts Adelie for every holdout row. Its raw accuracy reflects
-the majority-class share, while balanced accuracy and macro F1 expose its lack
-of useful recall for Chinstrap and Gentoo.
+KNN correctly classifies 83 of 86 holdout rows, compared with 81 for logistic
+regression. Relative to logistic regression, its holdout differences are
++0.023256 accuracy, +0.039216 balanced accuracy, and +0.036009 macro F1.
 
-Logistic regression improves holdout accuracy by 0.500000 and macro F1 by
-0.719360. It correctly classifies 81 of 86 holdout rows. Recall is 1.000000 for
-Adelie, 0.823529 for Chinstrap, and 0.935484 for Gentoo.
+KNN recall is 1.000000 for Adelie, 0.941176 for Chinstrap, and 0.935484 for
+Gentoo. Its three errors are one Chinstrap predicted as Gentoo and two Gentoo
+observations predicted as Adelie and Chinstrap. The row-level evidence is
+available in `predictions.csv`.
 
-## Cross-Validation Summary
+The logistic-regression confusion matrix is retained for continuity with the
+earlier baseline evaluation:
+
+![Logistic regression confusion matrix](confusion_matrix.png)
+
+## Cross-Validation Comparison
 
 The standard deviations below are population standard deviations across the
 five observed fold scores.
@@ -51,57 +58,47 @@ five observed fold scores.
 | --- | ---: | ---: | ---: |
 | Majority-class dummy | 0.441858 ± 0.006490 | 0.333333 ± 0.000000 | 0.204291 ± 0.002081 |
 | Logistic regression | 0.944800 ± 0.033510 | 0.923659 ± 0.043207 | 0.928288 ± 0.041342 |
+| 5-nearest neighbors | 0.959292 ± 0.010882 | 0.947829 ± 0.022578 | 0.949112 ± 0.017756 |
 
-Logistic-regression macro F1 ranges from 0.856905 to 0.981414. Its mean paired
-macro-F1 gain over the dummy model is 0.723996, with a minimum gain of 0.654885
-across the five shared folds.
+KNN has a mean paired macro-F1 difference of +0.020824 relative to logistic
+regression. The fold-level comparison shows why the mean alone is incomplete:
 
-| Fold | Accuracy | Balanced Accuracy | Macro F1 |
+| Fold | Logistic Macro F1 | KNN Macro F1 | KNN − Logistic |
 | ---: | ---: | ---: | ---: |
-| 1 | 0.942029 | 0.897436 | 0.916157 |
-| 2 | 0.985507 | 0.986111 | 0.981414 |
-| 3 | 0.956522 | 0.941270 | 0.946570 |
-| 4 | 0.884058 | 0.858095 | 0.856905 |
-| 5 | 0.955882 | 0.935385 | 0.940392 |
+| 1 | 0.916157 | 0.920694 | +0.004537 |
+| 2 | 0.981414 | 0.970661 | -0.010753 |
+| 3 | 0.946570 | 0.946570 | 0.000000 |
+| 4 | 0.856905 | 0.965079 | +0.108174 |
+| 5 | 0.940392 | 0.942555 | +0.002163 |
 
-Fold 4 produces the lowest logistic-regression scores. Its Chinstrap recall is
-0.714286, compared with 0.900000 Adelie recall and 0.960000 Gentoo recall. This
-supports an error-review hypothesis that Chinstrap remains the least stable
-class under the constrained two-feature design. It does not identify a causal
-reason for the errors.
+KNN slightly trails logistic regression in fold 2, ties it in fold 3, and
+shows its largest improvement in fold 4. Its macro-F1 standard deviation is
+lower in these five folds, largely because it avoids the linear model's
+fold-4 decline. This is observed stability under one partition, not proof that
+KNN is inherently more stable.
 
 ![Cross-validation fold scores](cross_validation_scores.png)
 
-## Holdout Error Pattern
-
-The logistic-regression holdout confusion matrix is:
-
-| Actual / Predicted | Adelie | Chinstrap | Gentoo |
-| --- | ---: | ---: | ---: |
-| Adelie | 38 | 0 | 0 |
-| Chinstrap | 1 | 14 | 2 |
-| Gentoo | 0 | 2 | 29 |
-
-All five holdout errors involve Chinstrap: one Chinstrap is predicted as
-Adelie, two Chinstraps are predicted as Gentoo, and two Gentoos are predicted
-as Chinstrap.
-
-![Logistic regression confusion matrix](confusion_matrix.png)
-
 ## Interpretation Boundary
 
-The holdout score is close to the five-fold mean, and logistic regression
-exceeds the dummy baseline in every observed fold. This is stronger evidence
-than a single split alone, but it remains specific to one dataset revision,
-one feature pair, one cross-validation partition, and two baseline models.
+The controlled comparison shows that a fixed local nonlinear decision rule can
+improve the mean score and reduce observed fold variation for this constrained
+two-feature problem. It does not establish universal KNN superiority: the
+linear model leads in one fold, the comparison contains only two substantive
+models, and no independent test dataset is available.
 
-The five training partitions overlap, so their scores are not independent.
-The reported standard deviations describe observed fold variation; they are
-not confidence intervals. The evaluation does not establish transfer to a new
-island, year, collection protocol, or field setting.
+The KNN parameters were not tuned, so this is not an optimization study. The
+five training partitions overlap, so their scores are not independent. The
+reported standard deviations describe observed fold variation and are not
+confidence intervals.
 
-The committed artifacts are functional evidence for a deterministic evaluation
-pipeline, not a benchmark claim or an ecological conclusion.
+The result remains specific to one dataset revision, one feature pair, one
+holdout, one cross-validation partition, and the fixed configurations above.
+It does not establish transfer to a new island, year, collection protocol, or
+field setting.
+
+The committed artifacts are functional evidence for a deterministic model
+comparison, not a benchmark claim or an ecological conclusion.
 
 ## Reproduction
 

@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_committed_reference_artifacts_match_manifest() -> None:
-    assert _verify_manifest(ROOT / "results") == 5
+    assert _verify_manifest(ROOT / "results") == 6
 
 
 def test_manifest_detects_changed_artifact(tmp_path: Path) -> None:

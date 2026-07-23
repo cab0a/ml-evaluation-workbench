@@ -1,4 +1,4 @@
-"""Regenerate or verify the committed v0.2 evaluation artifacts."""
+"""Regenerate or verify the committed v0.3 evaluation artifacts."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ ARTIFACT_NAMES = (
     "cross_validation_folds.csv",
     "cross_validation_scores.png",
     "metrics.json",
+    "model_comparison.csv",
     "predictions.csv",
 )
 MANIFEST_NAME = "checksums.sha256"
@@ -133,6 +134,11 @@ def main() -> int:
         raise SystemExit(
             "Logistic regression did not exceed the cross-validation baseline"
         )
+    if (
+        cross_validation["models"]["knn"]["macro_f1"]["mean"]
+        <= cross_validation["models"]["dummy"]["macro_f1"]["mean"]
+    ):
+        raise SystemExit("KNN did not exceed the cross-validation baseline")
     manifest = _write_manifest(args.output_dir)
     print(f"Checksums: {manifest}")
     return 0

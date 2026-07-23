@@ -1,6 +1,6 @@
 {
-  "report_version": 2,
-  "project_version": "0.2.0",
+  "report_version": 3,
+  "project_version": "0.3.0",
   "dataset": {
     "source": "data/penguins.csv",
     "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
@@ -26,6 +26,10 @@
   },
   "models": {
     "dummy": {
+      "configuration": {
+        "classifier": "DummyClassifier",
+        "strategy": "most_frequent"
+      },
       "accuracy": 0.44186,
       "balanced_accuracy": 0.333333,
       "macro_f1": 0.204301,
@@ -36,6 +40,11 @@
       }
     },
     "logistic_regression": {
+      "configuration": {
+        "classifier": "LogisticRegression",
+        "max_iter": 1000,
+        "random_state": 42
+      },
       "accuracy": 0.94186,
       "balanced_accuracy": 0.919671,
       "macro_f1": 0.923661,
@@ -44,12 +53,46 @@
         "Chinstrap": 0.823529,
         "Gentoo": 0.935484
       }
+    },
+    "knn": {
+      "configuration": {
+        "classifier": "KNeighborsClassifier",
+        "n_neighbors": 5,
+        "weights": "uniform",
+        "algorithm": "auto",
+        "leaf_size": 30,
+        "metric": "minkowski",
+        "p": 2
+      },
+      "accuracy": 0.965116,
+      "balanced_accuracy": 0.958887,
+      "macro_f1": 0.95967,
+      "per_class_recall": {
+        "Adelie": 1.0,
+        "Chinstrap": 0.941176,
+        "Gentoo": 0.935484
+      }
     }
   },
   "comparison": {
-    "accuracy_gain": 0.5,
-    "balanced_accuracy_gain": 0.586338,
-    "macro_f1_gain": 0.71936
+    "positive_difference_favors": "left_model",
+    "holdout_gain": {
+      "logistic_regression_minus_dummy": {
+        "accuracy": 0.5,
+        "balanced_accuracy": 0.586338,
+        "macro_f1": 0.71936
+      },
+      "knn_minus_dummy": {
+        "accuracy": 0.523256,
+        "balanced_accuracy": 0.625554,
+        "macro_f1": 0.755369
+      },
+      "knn_minus_logistic_regression": {
+        "accuracy": 0.023256,
+        "balanced_accuracy": 0.039216,
+        "macro_f1": 0.036009
+      }
+    }
   },
   "cross_validation": {
     "strategy": "stratified_k_fold",
@@ -97,26 +140,88 @@
           "min": 0.856905,
           "max": 0.981414
         }
+      },
+      "knn": {
+        "accuracy": {
+          "mean": 0.959292,
+          "std": 0.010882,
+          "min": 0.942029,
+          "max": 0.971014
+        },
+        "balanced_accuracy": {
+          "mean": 0.947829,
+          "std": 0.022578,
+          "min": 0.909744,
+          "max": 0.975358
+        },
+        "macro_f1": {
+          "mean": 0.949112,
+          "std": 0.017756,
+          "min": 0.920694,
+          "max": 0.970661
+        }
       }
     },
-    "paired_gain": {
-      "accuracy": {
-        "mean": 0.502941,
-        "std": 0.030278,
-        "min": 0.449275,
-        "max": 0.536232
+    "paired_difference": {
+      "logistic_regression_minus_dummy": {
+        "accuracy": {
+          "mean": 0.502941,
+          "std": 0.030278,
+          "min": 0.449275,
+          "max": 0.536232
+        },
+        "balanced_accuracy": {
+          "mean": 0.590326,
+          "std": 0.043207,
+          "min": 0.524762,
+          "max": 0.652778
+        },
+        "macro_f1": {
+          "mean": 0.723996,
+          "std": 0.04034,
+          "min": 0.654885,
+          "max": 0.774747
+        }
       },
-      "balanced_accuracy": {
-        "mean": 0.590326,
-        "std": 0.043207,
-        "min": 0.524762,
-        "max": 0.652778
+      "knn_minus_dummy": {
+        "accuracy": {
+          "mean": 0.517434,
+          "std": 0.014191,
+          "min": 0.492754,
+          "max": 0.536231
+        },
+        "balanced_accuracy": {
+          "mean": 0.614496,
+          "std": 0.022578,
+          "min": 0.576411,
+          "max": 0.642025
+        },
+        "macro_f1": {
+          "mean": 0.744821,
+          "std": 0.018379,
+          "min": 0.714027,
+          "max": 0.763994
+        }
       },
-      "macro_f1": {
-        "mean": 0.723996,
-        "std": 0.04034,
-        "min": 0.654885,
-        "max": 0.774747
+      "knn_minus_logistic_regression": {
+        "accuracy": {
+          "mean": 0.014493,
+          "std": 0.036664,
+          "min": -0.014493,
+          "max": 0.086956
+        },
+        "balanced_accuracy": {
+          "mean": 0.024169,
+          "std": 0.042293,
+          "min": -0.010753,
+          "max": 0.106984
+        },
+        "macro_f1": {
+          "mean": 0.020824,
+          "std": 0.043987,
+          "min": -0.010753,
+          "max": 0.108174
+        }
       }
     }
   }

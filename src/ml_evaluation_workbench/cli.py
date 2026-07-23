@@ -62,18 +62,26 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         output_dir / "cross_validation_scores.png",
         result.cross_validation_folds,
     )
+    model_comparison_path = write_csv(
+        output_dir / "model_comparison.csv",
+        result.model_comparison,
+    )
 
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
+    knn = result.metrics["models"]["knn"]
     cv_logistic = result.metrics["cross_validation"]["models"][
         "logistic_regression"
     ]
+    cv_knn = result.metrics["cross_validation"]["models"]["knn"]
     print(f"Dataset rows: {result.metrics['dataset']['rows']}")
     print(f"Training rows: {result.metrics['split']['train_rows']}")
     print(f"Test rows: {result.metrics['split']['test_rows']}")
     print(f"Dummy accuracy: {dummy['accuracy']:.3f}")
     print(f"Logistic regression accuracy: {logistic['accuracy']:.3f}")
     print(f"Logistic regression macro F1: {logistic['macro_f1']:.3f}")
+    print(f"KNN accuracy: {knn['accuracy']:.3f}")
+    print(f"KNN macro F1: {knn['macro_f1']:.3f}")
     print(f"Cross-validation folds: {args.cv_folds}")
     print(
         "Logistic regression CV macro F1 mean: "
@@ -83,11 +91,20 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "Logistic regression CV macro F1 std: "
         f"{cv_logistic['macro_f1']['std']:.3f}"
     )
+    print(
+        "KNN CV macro F1 mean: "
+        f"{cv_knn['macro_f1']['mean']:.3f}"
+    )
+    print(
+        "KNN CV macro F1 std: "
+        f"{cv_knn['macro_f1']['std']:.3f}"
+    )
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
     print(f"Confusion matrix: {confusion_path}")
     print(f"Cross-validation fold scores: {cross_validation_path}")
     print(f"Cross-validation scores: {cross_validation_plot_path}")
+    print(f"Model comparison: {model_comparison_path}")
     return 0
 
 
@@ -100,7 +117,7 @@ def build_parser() -> argparse.ArgumentParser:
     commands = parser.add_subparsers(dest="command", required=True)
     evaluate_parser = commands.add_parser(
         "evaluate",
-        help="Compare dummy and logistic-regression classifiers",
+        help="Compare dummy, logistic-regression, and KNN classifiers",
     )
     evaluate_parser.add_argument("dataset", help="Palmer Penguins CSV path")
     evaluate_parser.add_argument(

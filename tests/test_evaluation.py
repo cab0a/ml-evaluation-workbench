@@ -15,6 +15,7 @@ def test_evaluation_is_deterministic(penguins_frame) -> None:
     assert first.cross_validation_folds.equals(
         second.cross_validation_folds
     )
+    assert first.model_comparison.equals(second.model_comparison)
     assert np.array_equal(first.confusion, second.confusion)
 
 
@@ -29,6 +30,25 @@ def test_logistic_regression_exceeds_dummy_baseline(penguins_frame) -> None:
     assert 0.8 < logistic["macro_f1"] < 1.0
 
 
+def test_knn_is_a_fixed_nonlinear_comparator(penguins_frame) -> None:
+    result = evaluate_dataset(penguins_frame)
+    dummy = result.metrics["models"]["dummy"]
+    knn = result.metrics["models"]["knn"]
+
+    assert knn["configuration"] == {
+        "classifier": "KNeighborsClassifier",
+        "n_neighbors": 5,
+        "weights": "uniform",
+        "algorithm": "auto",
+        "leaf_size": 30,
+        "metric": "minkowski",
+        "p": 2,
+    }
+    assert knn["accuracy"] > dummy["accuracy"]
+    assert knn["balanced_accuracy"] > dummy["balanced_accuracy"]
+    assert knn["macro_f1"] > dummy["macro_f1"]
+
+
 def test_stratified_holdout_and_confusion_matrix_are_consistent(
     penguins_frame,
 ) -> None:
@@ -41,6 +61,8 @@ def test_stratified_holdout_and_confusion_matrix_are_consistent(
     assert int(result.confusion.sum()) == 86
     assert len(result.predictions) == 86
     assert result.predictions["source_row"].is_monotonic_increasing
+    assert "knn_prediction" in result.predictions
+    assert "knn_correct" in result.predictions
 
 
 def test_pipeline_handles_missing_bill_measurements(penguins_frame) -> None:
@@ -61,10 +83,14 @@ def test_cross_validation_records_shared_fold_evidence(penguins_frame) -> None:
     assert summary["strategy"] == "stratified_k_fold"
     assert summary["folds"] == 5
     assert summary["standard_deviation"] == "population_across_folds"
-    assert len(fold_scores) == 10
-    assert set(fold_scores["model"]) == {"dummy", "logistic_regression"}
+    assert len(fold_scores) == 15
+    assert set(fold_scores["model"]) == {
+        "dummy",
+        "logistic_regression",
+        "knn",
+    }
     assert set(fold_scores["fold"]) == {1, 2, 3, 4, 5}
-    for model_name in ("dummy", "logistic_regression"):
+    for model_name in ("dummy", "logistic_regression", "knn"):
         model_rows = fold_scores[fold_scores["model"] == model_name]
         assert int(model_rows["validation_rows"].sum()) == 344
 
@@ -74,7 +100,7 @@ def test_cross_validation_summary_matches_fold_scores(penguins_frame) -> None:
     fold_scores = result.cross_validation_folds
     summary = result.metrics["cross_validation"]
 
-    for model_name in ("dummy", "logistic_regression"):
+    for model_name in ("dummy", "logistic_regression", "knn"):
         model_rows = fold_scores[fold_scores["model"] == model_name]
         for score_name in ("accuracy", "balanced_accuracy", "macro_f1"):
             expected_mean = round(float(model_rows[score_name].mean()), 6)
@@ -90,6 +116,36 @@ def test_cross_validation_summary_matches_fold_scores(penguins_frame) -> None:
         summary["models"]["logistic_regression"]["macro_f1"]["mean"]
         > summary["models"]["dummy"]["macro_f1"]["mean"]
     )
+    assert (
+        summary["models"]["knn"]["macro_f1"]["mean"]
+        > summary["models"]["dummy"]["macro_f1"]["mean"]
+    )
+
+
+def test_controlled_model_comparison_uses_paired_differences(
+    penguins_frame,
+) -> None:
+    result = evaluate_dataset(penguins_frame)
+    holdout = result.metrics["comparison"]["holdout_gain"]
+    cross_validation = result.metrics["cross_validation"]["paired_difference"]
+
+    assert set(holdout) == {
+        "logistic_regression_minus_dummy",
+        "knn_minus_dummy",
+        "knn_minus_logistic_regression",
+    }
+    assert set(cross_validation) == set(holdout)
+    expected = round(
+        result.metrics["models"]["knn"]["macro_f1"]
+        - result.metrics["models"]["logistic_regression"]["macro_f1"],
+        6,
+    )
+    assert holdout["knn_minus_logistic_regression"]["macro_f1"] == expected
+    assert list(result.model_comparison["model"]) == [
+        "dummy",
+        "logistic_regression",
+        "knn",
+    ]
 
 
 @pytest.mark.parametrize("test_size", [0.0, 1.0, -0.1, 1.1])

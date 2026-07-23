@@ -1,0 +1,4 @@
+model,role,holdout_accuracy,holdout_balanced_accuracy,holdout_macro_f1,cv_accuracy_mean,cv_accuracy_std,cv_balanced_accuracy_mean,cv_balanced_accuracy_std,cv_macro_f1_mean,cv_macro_f1_std
+dummy,reference_baseline,0.44186,0.333333,0.204301,0.441858,0.00649,0.333333,0.0,0.204291,0.002081
+logistic_regression,linear_baseline,0.94186,0.919671,0.923661,0.9448,0.03351,0.923659,0.043207,0.928288,0.041342
+knn,nonlinear_comparator,0.965116,0.958887,0.95967,0.959292,0.010882,0.947829,0.022578,0.949112,0.017756

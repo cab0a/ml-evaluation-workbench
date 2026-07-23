@@ -134,6 +134,7 @@ def write_cross_validation_scores(
     model_styles = {
         "dummy": ("Majority-class dummy", "#6b7280"),
         "logistic_regression": ("Logistic regression", "#2563eb"),
+        "knn": ("5-nearest neighbors", "#059669"),
     }
     figure, axes = plt.subplots(
         1,

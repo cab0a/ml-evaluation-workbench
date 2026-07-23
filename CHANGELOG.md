@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.0] - 2026-07-23
+
+### Added
+
+- Fixed 5-nearest-neighbors nonlinear comparator using the same features,
+  preprocessing, holdout, and cross-validation folds as existing models
+- Model configuration metadata and paired holdout and fold-level differences
+  for all controlled comparisons
+- Compact `model_comparison.csv` summary spanning holdout and
+  cross-validation metrics
+- KNN holdout predictions, correctness flags, fold-level scores, tests, and
+  CLI summaries
+
+### Changed
+
+- Evaluation report schema updated to version 3
+- Cross-validation figure expanded to show all three models
+- Documentation expanded with a no-tuning boundary and fold-level comparison
+  interpretation
+
 ## [0.2.0] - 2026-07-22
 
 ### Added
