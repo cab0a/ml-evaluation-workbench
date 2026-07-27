@@ -1,10 +1,10 @@
-# Version 0.5 Evaluation Result
+# Version 0.6 Evaluation Result
 
 ## Question
 
-How do sigmoid-calibrated probabilities compare with uncalibrated probabilities
-for the fixed logistic-regression and KNN classifiers under shared outer
-folds?
+How sensitive are the fixed logistic-regression and KNN classifiers to
+controlled missing-value injection and Gaussian feature noise under shared
+outer folds?
 
 ## Controlled Setup
 
@@ -25,14 +25,20 @@ folds?
   training partition
 - Probability metrics: multiclass log loss, multiclass Brier score, and
   ten-bin top-label expected calibration error
+- Missing-value rates: 0%, 10%, 25%, and 50% of observed validation feature
+  cells, selected without replacement
+- Gaussian-noise levels: 0, 0.25, 0.5, and 1.0 times each outer training
+  fold's population standard deviation per feature
+- Perturbation scope: validation features only; training data and validation
+  labels remain unchanged
 - Random state: 42; label-shuffle seed is 42 plus the one-based fold number
 
 The majority-class dummy remains in the primary comparison but is excluded
 from feature ablation because it does not use input features.
 
-The v0.4 feature-ablation and leakage evidence is retained as context. The
-v0.5 comparison does not tune the models or select a calibration method from
-the reported scores.
+The v0.4 feature-ablation and leakage evidence and the v0.5 calibration
+evidence are retained as context. The v0.6 comparison does not tune the models
+or select perturbation levels from the reported scores.
 
 ## Primary Comparison Reference
 
@@ -134,12 +140,50 @@ points shown above, including empty bins. Fold-level scores and paired
 differences are available in `probability_calibration_folds.csv`,
 `probability_calibration_summary.csv`, and `metrics.json`.
 
+## Missing-Value and Noise Robustness
+
+All values below are mean macro F1 across the same five outer validation
+folds. The unperturbed rows reproduce the primary cross-validation scores.
+
+| Perturbation | Severity | Logistic Regression | 5-Nearest Neighbors |
+| --- | ---: | ---: | ---: |
+| Injected missing values | 0% | 0.928 | 0.949 |
+| Injected missing values | 10% | 0.845 | 0.870 |
+| Injected missing values | 25% | 0.770 | 0.759 |
+| Injected missing values | 50% | 0.624 | 0.625 |
+| Gaussian feature noise | 0.00x | 0.928 | 0.949 |
+| Gaussian feature noise | 0.25x | 0.910 | 0.920 |
+| Gaussian feature noise | 0.50x | 0.860 | 0.839 |
+| Gaussian feature noise | 1.00x | 0.692 | 0.673 |
+
+At 50% injected missingness, paired mean macro-F1 differences from the
+unperturbed scores are -0.304 for logistic regression and -0.324 for KNN.
+At 1.0x Gaussian noise, the corresponding differences are -0.237 and -0.277.
+Both models show progressively lower mean scores under these fixed severity
+levels, with no consistent robustness advantage across the two perturbation
+types.
+
+![Missing-value and noise robustness](robustness.png)
+
+The missing-value experiment injects an exact nearest-integer cell count into
+previously observed validation cells. Existing missing cells remain missing
+and are not counted as injected. Gaussian noise is applied only to observed
+validation cells, and its per-feature scale is calculated from the
+corresponding outer training fold. Each perturbed validation matrix is shared
+by both models.
+
+`robustness_folds.csv` records seeds, eligible and affected cells, realized
+fractions, noise scales, and fold metrics. `robustness_summary.csv` records
+means, fold standard deviations, and paired differences from the unperturbed
+condition. `robustness_diagnostics.json` fixes the protocol and interpretation
+boundary.
+
 ## Continuity Artifacts
 
 The deterministic holdout, three-model comparison, fold-level scores,
 row-level predictions, and logistic-regression confusion matrix from v0.3 are
-retained alongside the v0.4 diagnostics and regenerated under report schema
-version 5.
+retained alongside the v0.4 diagnostics and v0.5 calibration evidence, then
+regenerated under report schema version 6.
 
 ![Cross-validation fold scores](cross_validation_scores.png)
 
@@ -147,10 +191,11 @@ version 5.
 
 ## Interpretation Boundary
 
-Version 0.5 adds calibration evidence, not a production probability-quality
-guarantee. The calibration comparison, ablation, and negative control reuse one
-five-fold outer partition and one public dataset revision. Their standard
-deviations describe observed fold variation and are not confidence intervals.
+Version 0.6 adds controlled sensitivity evidence, not a deployment-robustness
+guarantee. The robustness and calibration comparisons, ablation, and negative
+control reuse one five-fold outer partition and one public dataset revision.
+Their standard deviations describe observed fold variation and are not
+confidence intervals.
 
 The reliability diagram uses top-label confidence rather than classwise
 calibration and depends on ten fixed bins. Empty or sparsely populated bins
@@ -158,10 +203,18 @@ carry little evidence. Only sigmoid calibration with three inner folds is
 evaluated; isotonic calibration, repeated splits, independent datasets, and
 deployment shift are outside this version's scope.
 
+The synthetic perturbations do not model a measured sensor, acquisition
+pipeline, missingness mechanism, or production data drift. Missing cells are
+selected independently across the two features, and Gaussian noise is
+independent across cells. Other patterns—including structured missingness,
+bias, outliers, correlated noise, label noise, and train-time corruption—can
+produce materially different results.
+
 The committed artifacts demonstrate a deterministic implementation of feature
-ablation, split-integrity checks, a negative control, and cross-fitted
-probability diagnostics. They are not a benchmark claim, causal
-feature-importance result, deployment guarantee, or ecological conclusion.
+ablation, split-integrity checks, a negative control, cross-fitted probability
+diagnostics, and synthetic robustness experiments. They are not a benchmark
+claim, causal feature-importance result, deployment guarantee, or ecological
+conclusion.
 
 ## Reproduction
 

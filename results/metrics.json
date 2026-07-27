@@ -1,6 +1,6 @@
 {
-  "report_version": 5,
-  "project_version": "0.5.0",
+  "report_version": 6,
+  "project_version": "0.6.0",
   "dataset": {
     "source": "data/penguins.csv",
     "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
@@ -819,5 +819,680 @@
       }
     },
     "interpretation": "diagnostic_comparison_not_a_guarantee_that_calibration_improves"
+  },
+  "robustness": {
+    "strategy": "shared_outer_fold_validation_perturbation",
+    "outer_folds": 5,
+    "training_data": "unchanged",
+    "validation_labels": "unchanged",
+    "models": [
+      "logistic_regression",
+      "knn"
+    ],
+    "seed_rule": {
+      "missing_values": "random_state_plus_10000_plus_fold_times_100_plus_severity_index",
+      "gaussian_noise": "random_state_plus_20000_plus_fold_times_100_plus_severity_index",
+      "shared_across_models": true
+    },
+    "missing_values": {
+      "rates": [
+        0.0,
+        0.1,
+        0.25,
+        0.5
+      ],
+      "scope": "observed_validation_feature_cells_only",
+      "selection": "without_replacement_nearest_integer_cell_count",
+      "existing_missing_cells": "preserved_and_not_counted_as_injected"
+    },
+    "gaussian_noise": {
+      "standard_deviation_multipliers": [
+        0.0,
+        0.25,
+        0.5,
+        1.0
+      ],
+      "distribution": "zero_mean_gaussian",
+      "scale_source": "outer_training_partition_population_std",
+      "scope": "observed_validation_feature_cells_only",
+      "existing_missing_cells": "preserved"
+    },
+    "summary": {
+      "missing_values": {
+        "severity_unit": "fraction_of_observed_validation_cells",
+        "conditions": {
+          "0": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.9448,
+                "std": 0.03351,
+                "min": 0.884058,
+                "max": 0.985507,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.923659,
+                "std": 0.043207,
+                "min": 0.858095,
+                "max": 0.986111,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "macro_f1": {
+                "mean": 0.928288,
+                "std": 0.041342,
+                "min": 0.856905,
+                "max": 0.981414,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.959292,
+                "std": 0.010882,
+                "min": 0.942029,
+                "max": 0.971014,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.947829,
+                "std": 0.022578,
+                "min": 0.909744,
+                "max": 0.975358,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "macro_f1": {
+                "mean": 0.949112,
+                "std": 0.017756,
+                "min": 0.920694,
+                "max": 0.970661,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              }
+            }
+          },
+          "0.1": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.869352,
+                "std": 0.035153,
+                "min": 0.826087,
+                "max": 0.926471,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.075447,
+                  "std": 0.030821,
+                  "min": -0.115942,
+                  "max": -0.029411
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.848388,
+                "std": 0.035119,
+                "min": 0.804762,
+                "max": 0.898632,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.075271,
+                  "std": 0.027354,
+                  "min": -0.107655,
+                  "max": -0.036753
+                }
+              },
+              "macro_f1": {
+                "mean": 0.844581,
+                "std": 0.037763,
+                "min": 0.797106,
+                "max": 0.902614,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.083707,
+                  "std": 0.031714,
+                  "min": -0.12471,
+                  "max": -0.037778
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.889642,
+                "std": 0.026583,
+                "min": 0.855072,
+                "max": 0.926471,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.06965,
+                  "std": 0.024796,
+                  "min": -0.10145,
+                  "max": -0.029411
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.878335,
+                "std": 0.034226,
+                "min": 0.83335,
+                "max": 0.913968,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.069493,
+                  "std": 0.022609,
+                  "min": -0.099365,
+                  "max": -0.036752
+                }
+              },
+              "macro_f1": {
+                "mean": 0.869882,
+                "std": 0.030663,
+                "min": 0.833311,
+                "max": 0.906752,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.07923,
+                  "std": 0.026696,
+                  "min": -0.113259,
+                  "max": -0.035803
+                }
+              }
+            }
+          },
+          "0.25": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.79058,
+                "std": 0.032114,
+                "min": 0.75,
+                "max": 0.84058,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.15422,
+                  "std": 0.055993,
+                  "min": -0.205882,
+                  "max": -0.072464
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.786496,
+                "std": 0.035889,
+                "min": 0.735214,
+                "max": 0.839041,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.137164,
+                  "std": 0.066418,
+                  "min": -0.200171,
+                  "max": -0.053968
+                }
+              },
+              "macro_f1": {
+                "mean": 0.769885,
+                "std": 0.033294,
+                "min": 0.721026,
+                "max": 0.819022,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.158402,
+                  "std": 0.063081,
+                  "min": -0.219366,
+                  "max": -0.067925
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.781841,
+                "std": 0.045667,
+                "min": 0.735294,
+                "max": 0.855072,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.177451,
+                  "std": 0.044939,
+                  "min": -0.220588,
+                  "max": -0.115942
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.771393,
+                "std": 0.050368,
+                "min": 0.712698,
+                "max": 0.839683,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.176436,
+                  "std": 0.05566,
+                  "min": -0.228572,
+                  "max": -0.094789
+                }
+              },
+              "macro_f1": {
+                "mean": 0.75877,
+                "std": 0.049194,
+                "min": 0.703455,
+                "max": 0.833931,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.190342,
+                  "std": 0.049278,
+                  "min": -0.2391,
+                  "max": -0.130838
+                }
+              }
+            }
+          },
+          "0.5": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.627749,
+                "std": 0.033204,
+                "min": 0.573529,
+                "max": 0.666667,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.31705,
+                  "std": 0.053497,
+                  "min": -0.382353,
+                  "max": -0.246377
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.649109,
+                "std": 0.050047,
+                "min": 0.563932,
+                "max": 0.707302,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.274551,
+                  "std": 0.072799,
+                  "min": -0.371453,
+                  "max": -0.205079
+                }
+              },
+              "macro_f1": {
+                "mean": 0.623804,
+                "std": 0.037187,
+                "min": 0.560791,
+                "max": 0.66952,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.304483,
+                  "std": 0.058128,
+                  "min": -0.379601,
+                  "max": -0.233839
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.639301,
+                "std": 0.052472,
+                "min": 0.558824,
+                "max": 0.710145,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.319991,
+                  "std": 0.045874,
+                  "min": -0.397058,
+                  "max": -0.260869
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.634788,
+                "std": 0.058338,
+                "min": 0.523761,
+                "max": 0.682316,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.31304,
+                  "std": 0.063333,
+                  "min": -0.423931,
+                  "max": -0.227428
+                }
+              },
+              "macro_f1": {
+                "mean": 0.624978,
+                "std": 0.049923,
+                "min": 0.536055,
+                "max": 0.687466,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.324134,
+                  "std": 0.044204,
+                  "min": -0.4065,
+                  "max": -0.283195
+                }
+              }
+            }
+          }
+        }
+      },
+      "gaussian_noise": {
+        "severity_unit": "training_feature_standard_deviation_multiplier",
+        "conditions": {
+          "0": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.9448,
+                "std": 0.03351,
+                "min": 0.884058,
+                "max": 0.985507,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.923659,
+                "std": 0.043207,
+                "min": 0.858095,
+                "max": 0.986111,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "macro_f1": {
+                "mean": 0.928288,
+                "std": 0.041342,
+                "min": 0.856905,
+                "max": 0.981414,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.959292,
+                "std": 0.010882,
+                "min": 0.942029,
+                "max": 0.971014,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.947829,
+                "std": 0.022578,
+                "min": 0.909744,
+                "max": 0.975358,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              },
+              "macro_f1": {
+                "mean": 0.949112,
+                "std": 0.017756,
+                "min": 0.920694,
+                "max": 0.970661,
+                "paired_difference_vs_unperturbed": {
+                  "mean": 0.0,
+                  "std": 0.0,
+                  "min": 0.0,
+                  "max": 0.0
+                }
+              }
+            }
+          },
+          "0.25": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.927281,
+                "std": 0.020682,
+                "min": 0.898551,
+                "max": 0.956522,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.017519,
+                  "std": 0.021457,
+                  "min": -0.044117,
+                  "max": 0.014493
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.908359,
+                "std": 0.022575,
+                "min": 0.879683,
+                "max": 0.948413,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.0153,
+                  "std": 0.026514,
+                  "min": -0.037778,
+                  "max": 0.021588
+                }
+              },
+              "macro_f1": {
+                "mean": 0.909596,
+                "std": 0.022808,
+                "min": 0.875924,
+                "max": 0.944241,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.018692,
+                  "std": 0.025381,
+                  "min": -0.042785,
+                  "max": 0.019019
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.936061,
+                "std": 0.014717,
+                "min": 0.913043,
+                "max": 0.956522,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.023231,
+                  "std": 0.01964,
+                  "min": -0.057971,
+                  "max": 0.0
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.916281,
+                "std": 0.023997,
+                "min": 0.880317,
+                "max": 0.948413,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.031548,
+                  "std": 0.029248,
+                  "min": -0.084762,
+                  "max": 0.0
+                }
+              },
+              "macro_f1": {
+                "mean": 0.91952,
+                "std": 0.021222,
+                "min": 0.886325,
+                "max": 0.949623,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.029592,
+                  "std": 0.027434,
+                  "min": -0.078754,
+                  "max": 0.0
+                }
+              }
+            }
+          },
+          "0.5": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.880989,
+                "std": 0.035682,
+                "min": 0.84058,
+                "max": 0.941176,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.063811,
+                  "std": 0.040528,
+                  "min": -0.130435,
+                  "max": -0.014706
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.863478,
+                "std": 0.035894,
+                "min": 0.814644,
+                "max": 0.924274,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.060182,
+                  "std": 0.059731,
+                  "min": -0.171467,
+                  "max": -0.011111
+                }
+              },
+              "macro_f1": {
+                "mean": 0.859552,
+                "std": 0.039358,
+                "min": 0.815434,
+                "max": 0.930273,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.068735,
+                  "std": 0.055902,
+                  "min": -0.16598,
+                  "max": -0.010119
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.860656,
+                "std": 0.041262,
+                "min": 0.797101,
+                "max": 0.926471,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.098636,
+                  "std": 0.04697,
+                  "min": -0.173913,
+                  "max": -0.029411
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.843303,
+                "std": 0.034203,
+                "min": 0.795238,
+                "max": 0.898632,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.104525,
+                  "std": 0.046202,
+                  "min": -0.169841,
+                  "max": -0.04906
+                }
+              },
+              "macro_f1": {
+                "mean": 0.838598,
+                "std": 0.041458,
+                "min": 0.781772,
+                "max": 0.908443,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.110514,
+                  "std": 0.050414,
+                  "min": -0.183307,
+                  "max": -0.034112
+                }
+              }
+            }
+          },
+          "1": {
+            "logistic_regression": {
+              "accuracy": {
+                "mean": 0.724169,
+                "std": 0.063976,
+                "min": 0.652174,
+                "max": 0.838235,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.220631,
+                  "std": 0.078077,
+                  "min": -0.304348,
+                  "max": -0.117647
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.695254,
+                "std": 0.070335,
+                "min": 0.605714,
+                "max": 0.818632,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.228406,
+                  "std": 0.086175,
+                  "min": -0.335556,
+                  "max": -0.116753
+                }
+              },
+              "macro_f1": {
+                "mean": 0.691684,
+                "std": 0.068542,
+                "min": 0.60465,
+                "max": 0.810793,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.236604,
+                  "std": 0.08598,
+                  "min": -0.34192,
+                  "max": -0.129599
+                }
+              }
+            },
+            "knn": {
+              "accuracy": {
+                "mean": 0.709633,
+                "std": 0.061897,
+                "min": 0.637681,
+                "max": 0.823529,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.249659,
+                  "std": 0.065022,
+                  "min": -0.318841,
+                  "max": -0.132353
+                }
+              },
+              "balanced_accuracy": {
+                "mean": 0.673729,
+                "std": 0.066467,
+                "min": 0.592381,
+                "max": 0.795214,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.274099,
+                  "std": 0.069575,
+                  "min": -0.348889,
+                  "max": -0.152478
+                }
+              },
+              "macro_f1": {
+                "mean": 0.67256,
+                "std": 0.065531,
+                "min": 0.592842,
+                "max": 0.792801,
+                "paired_difference_vs_unperturbed": {
+                  "mean": -0.276552,
+                  "std": 0.070469,
+                  "min": -0.353728,
+                  "max": -0.149754
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "interpretation": "controlled_sensitivity_evidence_not_deployment_robustness"
   }
 }

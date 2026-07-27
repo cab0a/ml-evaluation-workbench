@@ -1,0 +1,17 @@
+perturbation,severity,severity_unit,model,accuracy_mean,accuracy_std,accuracy_difference_vs_unperturbed_mean,balanced_accuracy_mean,balanced_accuracy_std,balanced_accuracy_difference_vs_unperturbed_mean,macro_f1_mean,macro_f1_std,macro_f1_difference_vs_unperturbed_mean
+missing_values,0.0,fraction_of_observed_validation_cells,logistic_regression,0.9448,0.03351,0.0,0.923659,0.043207,0.0,0.928288,0.041342,0.0
+missing_values,0.0,fraction_of_observed_validation_cells,knn,0.959292,0.010882,0.0,0.947829,0.022578,0.0,0.949112,0.017756,0.0
+missing_values,0.1,fraction_of_observed_validation_cells,logistic_regression,0.869352,0.035153,-0.075447,0.848388,0.035119,-0.075271,0.844581,0.037763,-0.083707
+missing_values,0.1,fraction_of_observed_validation_cells,knn,0.889642,0.026583,-0.06965,0.878335,0.034226,-0.069493,0.869882,0.030663,-0.07923
+missing_values,0.25,fraction_of_observed_validation_cells,logistic_regression,0.79058,0.032114,-0.15422,0.786496,0.035889,-0.137164,0.769885,0.033294,-0.158402
+missing_values,0.25,fraction_of_observed_validation_cells,knn,0.781841,0.045667,-0.177451,0.771393,0.050368,-0.176436,0.75877,0.049194,-0.190342
+missing_values,0.5,fraction_of_observed_validation_cells,logistic_regression,0.627749,0.033204,-0.31705,0.649109,0.050047,-0.274551,0.623804,0.037187,-0.304483
+missing_values,0.5,fraction_of_observed_validation_cells,knn,0.639301,0.052472,-0.319991,0.634788,0.058338,-0.31304,0.624978,0.049923,-0.324134
+gaussian_noise,0.0,training_feature_standard_deviation_multiplier,logistic_regression,0.9448,0.03351,0.0,0.923659,0.043207,0.0,0.928288,0.041342,0.0
+gaussian_noise,0.0,training_feature_standard_deviation_multiplier,knn,0.959292,0.010882,0.0,0.947829,0.022578,0.0,0.949112,0.017756,0.0
+gaussian_noise,0.25,training_feature_standard_deviation_multiplier,logistic_regression,0.927281,0.020682,-0.017519,0.908359,0.022575,-0.0153,0.909596,0.022808,-0.018692
+gaussian_noise,0.25,training_feature_standard_deviation_multiplier,knn,0.936061,0.014717,-0.023231,0.916281,0.023997,-0.031548,0.91952,0.021222,-0.029592
+gaussian_noise,0.5,training_feature_standard_deviation_multiplier,logistic_regression,0.880989,0.035682,-0.063811,0.863478,0.035894,-0.060182,0.859552,0.039358,-0.068735
+gaussian_noise,0.5,training_feature_standard_deviation_multiplier,knn,0.860656,0.041262,-0.098636,0.843303,0.034203,-0.104525,0.838598,0.041458,-0.110514
+gaussian_noise,1.0,training_feature_standard_deviation_multiplier,logistic_regression,0.724169,0.063976,-0.220631,0.695254,0.070335,-0.228406,0.691684,0.068542,-0.236604
+gaussian_noise,1.0,training_feature_standard_deviation_multiplier,knn,0.709633,0.061897,-0.249659,0.673729,0.066467,-0.274099,0.67256,0.065531,-0.276552

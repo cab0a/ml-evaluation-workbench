@@ -1,4 +1,4 @@
-"""Regenerate or verify the committed v0.5 evaluation artifacts."""
+"""Regenerate or verify the committed v0.6 evaluation artifacts."""
 
 from __future__ import annotations
 
@@ -30,6 +30,10 @@ ARTIFACT_NAMES = (
     "probability_calibration_folds.csv",
     "probability_calibration_predictions.csv",
     "probability_calibration_summary.csv",
+    "robustness.png",
+    "robustness_diagnostics.json",
+    "robustness_folds.csv",
+    "robustness_summary.csv",
 )
 MANIFEST_NAME = "checksums.sha256"
 
@@ -203,6 +207,38 @@ def main() -> int:
                         "Invalid calibration metric for "
                         f"{model_name}/{method}/{score_name}: {value}"
                     )
+    robustness = metrics["robustness"]
+    if robustness["strategy"] != (
+        "shared_outer_fold_validation_perturbation"
+    ):
+        raise SystemExit("Unexpected robustness evaluation strategy")
+    if robustness["training_data"] != "unchanged":
+        raise SystemExit("Robustness evaluation changed training data")
+    if robustness["validation_labels"] != "unchanged":
+        raise SystemExit("Robustness evaluation changed validation labels")
+    for model_name in ("logistic_regression", "knn"):
+        expected = cross_validation["models"][model_name]["macro_f1"]["mean"]
+        for perturbation in ("missing_values", "gaussian_noise"):
+            baseline = robustness["summary"][perturbation]["conditions"][
+                "0"
+            ][model_name]["macro_f1"]["mean"]
+            if baseline != expected:
+                raise SystemExit(
+                    "Robustness baseline mismatch for "
+                    f"{model_name}/{perturbation}: "
+                    f"expected {expected}, got {baseline}"
+                )
+            highest_condition = (
+                "0.5" if perturbation == "missing_values" else "1"
+            )
+            perturbed = robustness["summary"][perturbation][
+                "conditions"
+            ][highest_condition][model_name]["macro_f1"]["mean"]
+            if perturbed >= baseline:
+                raise SystemExit(
+                    "Highest robustness severity did not reduce macro F1 for "
+                    f"{model_name}/{perturbation}"
+                )
     manifest = _write_manifest(args.output_dir)
     print(f"Checksums: {manifest}")
     return 0

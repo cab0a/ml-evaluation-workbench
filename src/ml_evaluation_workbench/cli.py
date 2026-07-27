@@ -18,6 +18,7 @@ from .reporting import (
     write_json,
     write_probability_calibration,
     write_predictions,
+    write_robustness_scores,
 )
 
 
@@ -50,6 +51,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "probability_calibration": result.metrics[
             "probability_calibration"
         ],
+        "robustness": result.metrics["robustness"],
     }
 
     metrics_path = write_json(output_dir / "metrics.json", result.metrics)
@@ -114,6 +116,22 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         output_dir / "probability_calibration.png",
         result.probability_calibration_bins,
     )
+    robustness_folds_path = write_csv(
+        output_dir / "robustness_folds.csv",
+        result.robustness_folds,
+    )
+    robustness_summary_path = write_csv(
+        output_dir / "robustness_summary.csv",
+        result.robustness_summary,
+    )
+    robustness_diagnostics_path = write_json(
+        output_dir / "robustness_diagnostics.json",
+        result.robustness_diagnostics,
+    )
+    robustness_plot_path = write_robustness_scores(
+        output_dir / "robustness.png",
+        result.robustness_summary,
+    )
 
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
@@ -134,6 +152,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     calibration_models = result.metrics["probability_calibration"][
         "models_summary"
     ]
+    robustness_summary = result.metrics["robustness"]["summary"]
     print(f"Dataset rows: {result.metrics['dataset']['rows']}")
     print(f"Training rows: {result.metrics['split']['train_rows']}")
     print(f"Test rows: {result.metrics['split']['test_rows']}")
@@ -188,6 +207,20 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
             f"{model_name} CV log loss, sigmoid calibrated: "
             f"{calibrated_log_loss:.3f}"
         )
+        missing_macro_f1 = robustness_summary["missing_values"][
+            "conditions"
+        ]["0.5"][model_name]["macro_f1"]["mean"]
+        noise_macro_f1 = robustness_summary["gaussian_noise"][
+            "conditions"
+        ]["1"][model_name]["macro_f1"]["mean"]
+        print(
+            f"{model_name} macro F1 at 50% injected missingness: "
+            f"{missing_macro_f1:.3f}"
+        )
+        print(
+            f"{model_name} macro F1 at 1.0x feature noise: "
+            f"{noise_macro_f1:.3f}"
+        )
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
     print(f"Confusion matrix: {confusion_path}")
@@ -207,6 +240,10 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     )
     print(f"Probability calibration bins: {calibration_bins_path}")
     print(f"Probability calibration plot: {calibration_plot_path}")
+    print(f"Robustness folds: {robustness_folds_path}")
+    print(f"Robustness summary: {robustness_summary_path}")
+    print(f"Robustness diagnostics: {robustness_diagnostics_path}")
+    print(f"Robustness plot: {robustness_plot_path}")
     return 0
 
 

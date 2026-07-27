@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.6.0] - 2026-07-27
+
+### Added
+
+- Validation-only missing-value injection at 0%, 10%, 25%, and 50% of
+  observed feature cells
+- Validation-only zero-mean Gaussian noise at 0, 0.25, 0.5, and 1.0 times
+  each outer training fold's feature standard deviation
+- Shared perturbations across logistic regression and fixed KNN on the
+  existing five outer folds
+- Fold-level cell accounting, deterministic perturbation seeds, actual noise
+  scales, aggregate metrics, and paired differences from unperturbed scores
+- Robustness summary, diagnostics, and macro-F1 sensitivity figure
+
+### Changed
+
+- Evaluation report schema updated to version 6
+- Reproduction manifest expanded to twenty reference artifacts
+- Test evaluation results reused through a session fixture to keep the
+  expanded deterministic suite efficient
+- Documentation expanded with controlled-sensitivity results and a clear
+  boundary between synthetic perturbations and deployment robustness
+
 ## [0.5.0] - 2026-07-27
 
 ### Added

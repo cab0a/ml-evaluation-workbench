@@ -38,11 +38,14 @@ def test_evaluation_is_deterministic(penguins_frame) -> None:
     assert first.probability_calibration_bins.equals(
         second.probability_calibration_bins
     )
+    assert first.robustness_folds.equals(second.robustness_folds)
+    assert first.robustness_summary.equals(second.robustness_summary)
+    assert first.robustness_diagnostics == second.robustness_diagnostics
     assert np.array_equal(first.confusion, second.confusion)
 
 
-def test_logistic_regression_exceeds_dummy_baseline(penguins_frame) -> None:
-    result = evaluate_dataset(penguins_frame)
+def test_logistic_regression_exceeds_dummy_baseline(evaluation_result) -> None:
+    result = evaluation_result
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
 
@@ -52,8 +55,8 @@ def test_logistic_regression_exceeds_dummy_baseline(penguins_frame) -> None:
     assert 0.8 < logistic["macro_f1"] < 1.0
 
 
-def test_knn_is_a_fixed_nonlinear_comparator(penguins_frame) -> None:
-    result = evaluate_dataset(penguins_frame)
+def test_knn_is_a_fixed_nonlinear_comparator(evaluation_result) -> None:
+    result = evaluation_result
     dummy = result.metrics["models"]["dummy"]
     knn = result.metrics["models"]["knn"]
 
@@ -72,9 +75,9 @@ def test_knn_is_a_fixed_nonlinear_comparator(penguins_frame) -> None:
 
 
 def test_stratified_holdout_and_confusion_matrix_are_consistent(
-    penguins_frame,
+    evaluation_result,
 ) -> None:
-    result = evaluate_dataset(penguins_frame)
+    result = evaluation_result
 
     assert result.metrics["split"]["train_rows"] == 258
     assert result.metrics["split"]["test_rows"] == 86
@@ -87,18 +90,23 @@ def test_stratified_holdout_and_confusion_matrix_are_consistent(
     assert "knn_correct" in result.predictions
 
 
-def test_pipeline_handles_missing_bill_measurements(penguins_frame) -> None:
+def test_pipeline_handles_missing_bill_measurements(
+    penguins_frame,
+    evaluation_result,
+) -> None:
     assert int(
         penguins_frame[["bill_length_mm", "bill_depth_mm"]].isna().sum().sum()
     ) == 4
 
-    result = evaluate_dataset(penguins_frame)
+    result = evaluation_result
 
     assert result.metrics["dataset"]["missing_feature_cells"] == 4
 
 
-def test_cross_validation_records_shared_fold_evidence(penguins_frame) -> None:
-    result = evaluate_dataset(penguins_frame)
+def test_cross_validation_records_shared_fold_evidence(
+    evaluation_result,
+) -> None:
+    result = evaluation_result
     fold_scores = result.cross_validation_folds
     summary = result.metrics["cross_validation"]
 
@@ -117,8 +125,10 @@ def test_cross_validation_records_shared_fold_evidence(penguins_frame) -> None:
         assert int(model_rows["validation_rows"].sum()) == 344
 
 
-def test_cross_validation_summary_matches_fold_scores(penguins_frame) -> None:
-    result = evaluate_dataset(penguins_frame)
+def test_cross_validation_summary_matches_fold_scores(
+    evaluation_result,
+) -> None:
+    result = evaluation_result
     fold_scores = result.cross_validation_folds
     summary = result.metrics["cross_validation"]
 
@@ -145,9 +155,9 @@ def test_cross_validation_summary_matches_fold_scores(penguins_frame) -> None:
 
 
 def test_controlled_model_comparison_uses_paired_differences(
-    penguins_frame,
+    evaluation_result,
 ) -> None:
-    result = evaluate_dataset(penguins_frame)
+    result = evaluation_result
     holdout = result.metrics["comparison"]["holdout_gain"]
     cross_validation = result.metrics["cross_validation"]["paired_difference"]
 
@@ -171,9 +181,9 @@ def test_controlled_model_comparison_uses_paired_differences(
 
 
 def test_feature_ablation_uses_shared_folds_and_reference(
-    penguins_frame,
+    evaluation_result,
 ) -> None:
-    result = evaluate_dataset(penguins_frame)
+    result = evaluation_result
     folds = result.feature_ablation_folds
     summary = result.metrics["feature_ablation"]
 
@@ -207,9 +217,9 @@ def test_feature_ablation_uses_shared_folds_and_reference(
 
 
 def test_leakage_diagnostics_check_partitions_and_negative_control(
-    penguins_frame,
+    evaluation_result,
 ) -> None:
-    result = evaluate_dataset(penguins_frame)
+    result = evaluation_result
     diagnostics = result.leakage_diagnostics
     fold_rows = result.leakage_diagnostic_folds
 
@@ -243,9 +253,9 @@ def test_leakage_diagnostics_check_partitions_and_negative_control(
 
 
 def test_probability_calibration_uses_cross_fitted_probabilities(
-    penguins_frame,
+    evaluation_result,
 ) -> None:
-    result = evaluate_dataset(penguins_frame)
+    result = evaluation_result
     folds = result.probability_calibration_folds
     predictions = result.probability_calibration_predictions
     summary = result.metrics["probability_calibration"]
@@ -308,9 +318,9 @@ def test_probability_calibration_uses_cross_fitted_probabilities(
 
 
 def test_probability_calibration_metrics_and_bins_are_auditable(
-    penguins_frame,
+    evaluation_result,
 ) -> None:
-    result = evaluate_dataset(penguins_frame)
+    result = evaluation_result
     folds = result.probability_calibration_folds
     bins = result.probability_calibration_bins
     summary = result.metrics["probability_calibration"]
@@ -341,6 +351,111 @@ def test_probability_calibration_metrics_and_bins_are_auditable(
         assert (
             "sigmoid_minus_uncalibrated"
             in summary["paired_difference"][model_name]
+        )
+
+
+def test_robustness_uses_shared_folds_and_validation_perturbations(
+    evaluation_result,
+) -> None:
+    result = evaluation_result
+    folds = result.robustness_folds
+    diagnostics = result.robustness_diagnostics
+
+    assert diagnostics["strategy"] == (
+        "shared_outer_fold_validation_perturbation"
+    )
+    assert diagnostics["training_data"] == "unchanged"
+    assert diagnostics["validation_labels"] == "unchanged"
+    assert diagnostics["seed_rule"]["shared_across_models"] is True
+    assert len(folds) == 80
+    assert set(folds["perturbation"]) == {
+        "missing_values",
+        "gaussian_noise",
+    }
+    assert set(
+        folds[folds["perturbation"] == "missing_values"]["severity"]
+    ) == {0.0, 0.1, 0.25, 0.5}
+    assert set(
+        folds[folds["perturbation"] == "gaussian_noise"]["severity"]
+    ) == {0.0, 0.25, 0.5, 1.0}
+    seed_counts = folds.groupby(
+        ["perturbation", "severity", "fold"]
+    )["perturbation_seed"].nunique()
+    assert int(seed_counts.max()) == 1
+
+    for model_name in ("logistic_regression", "knn"):
+        primary = (
+            result.cross_validation_folds[
+                result.cross_validation_folds["model"] == model_name
+            ]
+            .sort_values("fold")
+            .reset_index(drop=True)
+        )
+        for perturbation in ("missing_values", "gaussian_noise"):
+            baseline = (
+                folds[
+                    (folds["model"] == model_name)
+                    & (folds["perturbation"] == perturbation)
+                    & (folds["severity"] == 0.0)
+                ]
+                .sort_values("fold")
+                .reset_index(drop=True)
+            )
+            for score_name in (
+                "accuracy",
+                "balanced_accuracy",
+                "macro_f1",
+            ):
+                assert np.allclose(
+                    baseline[score_name],
+                    primary[score_name],
+                )
+
+
+def test_robustness_records_cell_accounting_and_summaries(
+    evaluation_result,
+) -> None:
+    result = evaluation_result
+    folds = result.robustness_folds
+    summary = result.robustness_summary
+
+    assert len(summary) == 16
+    one_model = folds[folds["model"] == "logistic_regression"]
+    for perturbation, severity in (
+        ("missing_values", 0.5),
+        ("gaussian_noise", 1.0),
+    ):
+        condition_rows = one_model[
+            (one_model["perturbation"] == perturbation)
+            & (one_model["severity"] == severity)
+        ]
+        assert int(condition_rows["eligible_cells"].sum()) == 684
+        if perturbation == "missing_values":
+            assert condition_rows["affected_fraction"].between(
+                0.49,
+                0.51,
+            ).all()
+        else:
+            assert np.array_equal(
+                condition_rows["affected_cells"],
+                condition_rows["eligible_cells"],
+            )
+            assert (
+                condition_rows["noise_std_bill_length_mm"] > 0
+            ).all()
+            assert (
+                condition_rows["noise_std_bill_depth_mm"] > 0
+            ).all()
+
+    for row in summary.itertuples(index=False):
+        fold_rows = folds[
+            (folds["perturbation"] == row.perturbation)
+            & (folds["severity"] == row.severity)
+            & (folds["model"] == row.model)
+        ]
+        assert row.macro_f1_mean == round(
+            float(fold_rows["macro_f1"].mean()),
+            6,
         )
 
 

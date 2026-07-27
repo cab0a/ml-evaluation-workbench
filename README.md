@@ -11,10 +11,10 @@ ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
 
 **Question → Controlled Comparison → Diagnostics → Interpretation**
 
-Version 0.5.0 adds probability-calibration evidence for logistic regression
-and the fixed KNN comparator. Uncalibrated and sigmoid-calibrated probabilities
-are evaluated on the same outer folds, while each calibrator is fitted only
-inside its outer training partition.
+Version 0.6.0 adds controlled sensitivity experiments for injected missing
+values and Gaussian feature noise. Validation features are perturbed on the
+same outer folds while training data, labels, model settings, and preprocessing
+policy remain fixed.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
@@ -53,6 +53,9 @@ This project keeps those decisions explicit:
 - Cross-fitted uncalibrated and sigmoid-calibrated probabilities
 - Log loss, multiclass Brier score, and top-label calibration error
 - Reliability-bin CSV evidence and a calibration figure
+- Validation-only missing-value injection at four fixed rates
+- Gaussian feature noise scaled from each outer training fold
+- Fold-level perturbation accounting and robustness summaries
 - Accuracy, balanced accuracy, macro F1, and per-class recall
 - Cross-validation mean, population standard deviation, minimum, and maximum
 - Row-level holdout predictions with source-row references
@@ -105,7 +108,7 @@ ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
                                          [--calibration-folds INTEGER]
 ```
 
-The documented v0.5 command is:
+The documented v0.6 command is:
 
 ```bash
 ml-evaluation-workbench evaluate data/penguins.csv \
@@ -137,8 +140,12 @@ KNN shuffled-label macro F1 mean: 0.298
 Split integrity check: passed
 logistic_regression CV log loss, uncalibrated: 0.139
 logistic_regression CV log loss, sigmoid calibrated: 0.236
+logistic_regression macro F1 at 50% injected missingness: 0.624
+logistic_regression macro F1 at 1.0x feature noise: 0.692
 knn CV log loss, uncalibrated: 0.280
 knn CV log loss, sigmoid calibrated: 0.133
+knn macro F1 at 50% injected missingness: 0.625
+knn macro F1 at 1.0x feature noise: 0.673
 Metrics: results/metrics.json
 Predictions: results/predictions.csv
 Confusion matrix: results/confusion_matrix.png
@@ -155,6 +162,10 @@ Probability calibration summary: results/probability_calibration_summary.csv
 Probability calibration predictions: results/probability_calibration_predictions.csv
 Probability calibration bins: results/probability_calibration_bins.csv
 Probability calibration plot: results/probability_calibration.png
+Robustness folds: results/robustness_folds.csv
+Robustness summary: results/robustness_summary.csv
+Robustness diagnostics: results/robustness_diagnostics.json
+Robustness plot: results/robustness.png
 ```
 
 ## Dataset
@@ -169,7 +180,7 @@ columns. The data are available under CC0 1.0.
 
 Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
 sex, body mass, flipper length, and observation year are intentionally excluded
-from v0.5. This keeps the question interpretable and avoids relying on
+from v0.6. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
@@ -199,7 +210,12 @@ easy.
     from the corresponding outer training partition.
 14. Record fold-level log loss, multiclass Brier score, top-label expected
     calibration error, cross-fitted probabilities, and reliability bins.
-15. Save aggregate metrics, fold-level evidence, diagnostic summaries,
+15. Inject missing values into 0%, 10%, 25%, and 50% of previously observed
+    validation feature cells using deterministic seeds shared by both models.
+16. Add zero-mean Gaussian noise to observed validation cells at 0, 0.25,
+    0.5, and 1.0 times each outer training fold's feature standard deviation.
+17. Compare every perturbed score with the unperturbed score on the same fold.
+18. Save aggregate metrics, fold-level evidence, diagnostic summaries,
     predictions, and evaluation figures.
 
 The preprocessing steps are part of each scikit-learn `Pipeline`, so their
@@ -227,6 +243,8 @@ partition.
 - split-integrity checks and shuffled-training-label negative-control summaries
 - probability-calibration design, metric definitions, method summaries, and
   paired fold-level differences
+- robustness protocol, perturbation definitions, seed rules, cell accounting,
+  condition summaries, and paired differences from unperturbed scores
 
 `predictions.csv` contains:
 
@@ -261,9 +279,16 @@ contains one cross-fitted probability vector per source row, model, and
 method. `probability_calibration_bins.csv` records the ten equal-width
 top-label reliability bins used by `probability_calibration.png`.
 
+`robustness_folds.csv` records one row per perturbation, severity, fold, and
+model, including affected-cell counts, realized fractions, noise scales, and
+classification metrics. `robustness_summary.csv` provides fold summaries and
+paired mean differences from the unperturbed condition.
+`robustness_diagnostics.json` fixes the perturbation protocol and
+interpretation boundary. `robustness.png` visualizes macro-F1 sensitivity.
+
 `confusion_matrix.png` visualizes the logistic-regression holdout errors.
 `cross_validation_scores.png` shows all three models' aggregate scores in
-each fold. `checksums.sha256` fixes the bytes of all sixteen reference
+each fold. `checksums.sha256` fixes the bytes of all twenty reference
 artifacts.
 
 ## Evaluation
@@ -347,12 +372,32 @@ the 344 cross-fitted predictions per model and method.
 
 ![Top-label reliability diagram](results/probability_calibration.png)
 
+### Missing-Value and Noise Robustness
+
+| Perturbation | Severity | Logistic Macro F1 | KNN Macro F1 |
+| --- | ---: | ---: | ---: |
+| Injected missing values | 0% | 0.928 | 0.949 |
+| Injected missing values | 10% | 0.845 | 0.870 |
+| Injected missing values | 25% | 0.770 | 0.759 |
+| Injected missing values | 50% | 0.624 | 0.625 |
+| Gaussian feature noise | 0.00x | 0.928 | 0.949 |
+| Gaussian feature noise | 0.25x | 0.910 | 0.920 |
+| Gaussian feature noise | 0.50x | 0.860 | 0.839 |
+| Gaussian feature noise | 1.00x | 0.692 | 0.673 |
+
+At the highest tested severities, logistic regression loses 0.304 macro F1
+under missingness and 0.237 under noise; KNN loses 0.324 and 0.277. These are
+paired mean differences under fixed synthetic perturbations, not estimates of
+performance under a real acquisition failure or production drift.
+
+![Missing-value and noise robustness](results/robustness.png)
+
 See [results/README.md](results/README.md) for interpretation and the boundary
 between this controlled result and a general performance claim.
 
 ## Limitations
 
-- Version 0.5.0 evaluates one small dataset with one deterministic holdout and
+- Version 0.6.0 evaluates one small dataset with one deterministic holdout and
   one five-fold stratified cross-validation run.
 - A random row split does not measure transfer across islands, years, field
   conditions, or independent collection programs.
@@ -378,6 +423,12 @@ between this controlled result and a general performance claim.
   or within-bin calibration behavior. Empty bins provide no evidence.
 - Calibration estimates are based on a small dataset. Differences between
   metrics and folds should not be treated as deployment guarantees.
+- Missing-value injection is independent across observed feature cells and
+  does not represent a measured missingness mechanism.
+- Gaussian perturbations are independent, zero mean, and scaled from training
+  folds. They do not model bias, outliers, correlated sensor noise, or drift.
+- Training-time corruption, structured missingness, label noise, and combined
+  perturbations are outside the v0.6 scope.
 - The five fold scores are correlated because their training partitions
   overlap. Their standard deviation is descriptive and is not a confidence
   interval.
@@ -417,7 +468,11 @@ ml-evaluation-workbench/
 │   ├── probability_calibration_bins.csv
 │   ├── probability_calibration_folds.csv
 │   ├── probability_calibration_predictions.csv
-│   └── probability_calibration_summary.csv
+│   ├── probability_calibration_summary.csv
+│   ├── robustness.png
+│   ├── robustness_diagnostics.json
+│   ├── robustness_folds.csv
+│   └── robustness_summary.csv
 ├── src/ml_evaluation_workbench/
 │   ├── __init__.py
 │   ├── __main__.py
@@ -439,8 +494,8 @@ ml-evaluation-workbench/
 - **v0.2:** Stratified cross-validation and fold-level evidence
 - **v0.3:** Controlled model comparison
 - **v0.4:** Feature ablation and leakage diagnostics
-- **v0.5 (current):** Probability calibration
-- **v0.6:** Missing-value and noise robustness
+- **v0.5:** Probability calibration
+- **v0.6 (current):** Missing-value and noise robustness
 - **v0.7:** Class-imbalance sensitivity
 - **v0.8:** Cross-experiment summaries and interface review
 - **v0.9:** Documentation and reproducibility review

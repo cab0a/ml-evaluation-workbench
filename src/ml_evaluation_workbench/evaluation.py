@@ -58,6 +58,9 @@ PROBABILITY_SCORE_NAMES = (
     "top_label_ece",
 )
 CALIBRATION_BIN_COUNT = 10
+MISSING_RATES = (0.0, 0.1, 0.25, 0.5)
+NOISE_STD_MULTIPLIERS = (0.0, 0.25, 0.5, 1.0)
+ROBUSTNESS_PERTURBATIONS = ("missing_values", "gaussian_noise")
 
 
 @dataclass(slots=True)
@@ -74,6 +77,9 @@ class EvaluationResult:
     probability_calibration_summary: pd.DataFrame
     probability_calibration_predictions: pd.DataFrame
     probability_calibration_bins: pd.DataFrame
+    robustness_folds: pd.DataFrame
+    robustness_summary: pd.DataFrame
+    robustness_diagnostics: dict[str, Any]
     confusion: np.ndarray
     labels: tuple[str, ...]
 
@@ -816,6 +822,311 @@ def _probability_calibration(
     )
 
 
+def _inject_missing_values(
+    features: pd.DataFrame,
+    *,
+    rate: float,
+    seed: int,
+) -> tuple[pd.DataFrame, int, int]:
+    values = features.to_numpy(dtype=float, copy=True)
+    observed_locations = np.argwhere(~np.isnan(values))
+    eligible_cells = len(observed_locations)
+    affected_cells = int(round(rate * eligible_cells))
+    if affected_cells:
+        rng = np.random.default_rng(seed)
+        selected = rng.choice(
+            eligible_cells,
+            size=affected_cells,
+            replace=False,
+        )
+        selected_locations = observed_locations[selected]
+        values[
+            selected_locations[:, 0],
+            selected_locations[:, 1],
+        ] = np.nan
+    return (
+        pd.DataFrame(
+            values,
+            index=features.index,
+            columns=features.columns,
+        ),
+        affected_cells,
+        eligible_cells,
+    )
+
+
+def _add_gaussian_noise(
+    features: pd.DataFrame,
+    *,
+    training_standard_deviation: pd.Series,
+    multiplier: float,
+    seed: int,
+) -> tuple[pd.DataFrame, int, int, dict[str, float]]:
+    values = features.to_numpy(dtype=float, copy=True)
+    observed = ~np.isnan(values)
+    eligible_cells = int(np.sum(observed))
+    feature_noise_standard_deviation = (
+        training_standard_deviation.to_numpy(dtype=float) * multiplier
+    )
+    affected_cells = eligible_cells if multiplier > 0.0 else 0
+    if affected_cells:
+        rng = np.random.default_rng(seed)
+        noise = rng.normal(
+            loc=0.0,
+            scale=feature_noise_standard_deviation,
+            size=values.shape,
+        )
+        values[observed] += noise[observed]
+    noise_scales = {
+        feature_name: round(
+            float(feature_noise_standard_deviation[index]),
+            6,
+        )
+        for index, feature_name in enumerate(features.columns)
+    }
+    return (
+        pd.DataFrame(
+            values,
+            index=features.index,
+            columns=features.columns,
+        ),
+        affected_cells,
+        eligible_cells,
+        noise_scales,
+    )
+
+
+def _robustness_evaluation(
+    frame: pd.DataFrame,
+    *,
+    labels: tuple[str, ...],
+    random_state: int,
+    splits: tuple[tuple[np.ndarray, np.ndarray], ...],
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    features = frame[list(FEATURES)]
+    target = frame[TARGET]
+    rows: list[dict[str, Any]] = []
+
+    for fold, (train_indices, validation_indices) in enumerate(
+        splits,
+        start=1,
+    ):
+        training_features = features.iloc[train_indices]
+        validation_features = features.iloc[validation_indices]
+        training_standard_deviation = training_features.std(
+            axis=0,
+            skipna=True,
+            ddof=0,
+        ).fillna(0.0)
+        conditions: list[dict[str, Any]] = []
+        for severity_index, rate in enumerate(MISSING_RATES):
+            seed = random_state + 10_000 + fold * 100 + severity_index
+            (
+                perturbed,
+                affected_cells,
+                eligible_cells,
+            ) = _inject_missing_values(
+                validation_features,
+                rate=rate,
+                seed=seed,
+            )
+            conditions.append(
+                {
+                    "perturbation": "missing_values",
+                    "severity": rate,
+                    "severity_unit": (
+                        "fraction_of_observed_validation_cells"
+                    ),
+                    "seed": seed,
+                    "features": perturbed,
+                    "affected_cells": affected_cells,
+                    "eligible_cells": eligible_cells,
+                    "noise_scales": {
+                        feature_name: None for feature_name in FEATURES
+                    },
+                }
+            )
+        for severity_index, multiplier in enumerate(
+            NOISE_STD_MULTIPLIERS
+        ):
+            seed = random_state + 20_000 + fold * 100 + severity_index
+            (
+                perturbed,
+                affected_cells,
+                eligible_cells,
+                noise_scales,
+            ) = _add_gaussian_noise(
+                validation_features,
+                training_standard_deviation=training_standard_deviation,
+                multiplier=multiplier,
+                seed=seed,
+            )
+            conditions.append(
+                {
+                    "perturbation": "gaussian_noise",
+                    "severity": multiplier,
+                    "severity_unit": (
+                        "training_feature_standard_deviation_multiplier"
+                    ),
+                    "seed": seed,
+                    "features": perturbed,
+                    "affected_cells": affected_cells,
+                    "eligible_cells": eligible_cells,
+                    "noise_scales": noise_scales,
+                }
+            )
+
+        for model_name in DIAGNOSTIC_MODEL_NAMES:
+            model = _models(random_state)[model_name]
+            model.fit(
+                training_features,
+                target.iloc[train_indices],
+            )
+            for condition in conditions:
+                predicted = model.predict(condition["features"])
+                scores = _model_metrics(
+                    target.iloc[validation_indices],
+                    predicted,
+                    labels,
+                )
+                row: dict[str, Any] = {
+                    "perturbation": condition["perturbation"],
+                    "severity": condition["severity"],
+                    "severity_unit": condition["severity_unit"],
+                    "fold": fold,
+                    "model": model_name,
+                    "train_rows": len(train_indices),
+                    "validation_rows": len(validation_indices),
+                    "perturbation_seed": condition["seed"],
+                    "eligible_cells": condition["eligible_cells"],
+                    "affected_cells": condition["affected_cells"],
+                    "affected_fraction": round(
+                        condition["affected_cells"]
+                        / condition["eligible_cells"],
+                        6,
+                    ),
+                    **{
+                        f"noise_std_{feature_name}": condition[
+                            "noise_scales"
+                        ][feature_name]
+                        for feature_name in FEATURES
+                    },
+                    **{
+                        score_name: scores[score_name]
+                        for score_name in SCORE_NAMES
+                    },
+                }
+                rows.append(row)
+
+    fold_scores = pd.DataFrame(rows)
+    summary_rows: list[dict[str, Any]] = []
+    perturbation_summaries: dict[str, Any] = {}
+    severity_values = {
+        "missing_values": MISSING_RATES,
+        "gaussian_noise": NOISE_STD_MULTIPLIERS,
+    }
+    severity_units = {
+        "missing_values": "fraction_of_observed_validation_cells",
+        "gaussian_noise": (
+            "training_feature_standard_deviation_multiplier"
+        ),
+    }
+    for perturbation in ROBUSTNESS_PERTURBATIONS:
+        perturbation_summaries[perturbation] = {
+            "severity_unit": severity_units[perturbation],
+            "conditions": {},
+        }
+        for severity in severity_values[perturbation]:
+            condition_key = f"{severity:g}"
+            perturbation_summaries[perturbation]["conditions"][
+                condition_key
+            ] = {}
+            for model_name in DIAGNOSTIC_MODEL_NAMES:
+                condition_rows = fold_scores[
+                    (fold_scores["perturbation"] == perturbation)
+                    & (fold_scores["severity"] == severity)
+                    & (fold_scores["model"] == model_name)
+                ].set_index("fold")
+                baseline_rows = fold_scores[
+                    (fold_scores["perturbation"] == perturbation)
+                    & (fold_scores["severity"] == 0.0)
+                    & (fold_scores["model"] == model_name)
+                ].set_index("fold")
+                score_metrics: dict[str, Any] = {}
+                summary_row: dict[str, Any] = {
+                    "perturbation": perturbation,
+                    "severity": severity,
+                    "severity_unit": severity_units[perturbation],
+                    "model": model_name,
+                }
+                for score_name in SCORE_NAMES:
+                    score_summary = _score_summary(
+                        condition_rows[score_name]
+                    )
+                    paired_difference = _score_summary(
+                        condition_rows[score_name]
+                        - baseline_rows[score_name]
+                    )
+                    score_metrics[score_name] = {
+                        **score_summary,
+                        "paired_difference_vs_unperturbed": (
+                            paired_difference
+                        ),
+                    }
+                    summary_row[
+                        f"{score_name}_mean"
+                    ] = score_summary["mean"]
+                    summary_row[
+                        f"{score_name}_std"
+                    ] = score_summary["std"]
+                    summary_row[
+                        f"{score_name}_difference_vs_unperturbed_mean"
+                    ] = paired_difference["mean"]
+                perturbation_summaries[perturbation]["conditions"][
+                    condition_key
+                ][model_name] = score_metrics
+                summary_rows.append(summary_row)
+
+    diagnostics = {
+        "strategy": "shared_outer_fold_validation_perturbation",
+        "outer_folds": len(splits),
+        "training_data": "unchanged",
+        "validation_labels": "unchanged",
+        "models": list(DIAGNOSTIC_MODEL_NAMES),
+        "seed_rule": {
+            "missing_values": (
+                "random_state_plus_10000_plus_fold_times_100"
+                "_plus_severity_index"
+            ),
+            "gaussian_noise": (
+                "random_state_plus_20000_plus_fold_times_100"
+                "_plus_severity_index"
+            ),
+            "shared_across_models": True,
+        },
+        "missing_values": {
+            "rates": list(MISSING_RATES),
+            "scope": "observed_validation_feature_cells_only",
+            "selection": "without_replacement_nearest_integer_cell_count",
+            "existing_missing_cells": "preserved_and_not_counted_as_injected",
+        },
+        "gaussian_noise": {
+            "standard_deviation_multipliers": list(
+                NOISE_STD_MULTIPLIERS
+            ),
+            "distribution": "zero_mean_gaussian",
+            "scale_source": "outer_training_partition_population_std",
+            "scope": "observed_validation_feature_cells_only",
+            "existing_missing_cells": "preserved",
+        },
+        "summary": perturbation_summaries,
+        "interpretation": (
+            "controlled_sensitivity_evidence_not_deployment_robustness"
+        ),
+    }
+    return fold_scores, pd.DataFrame(summary_rows), diagnostics
+
+
 def evaluate_dataset(
     frame: pd.DataFrame,
     *,
@@ -896,6 +1207,16 @@ def evaluate_dataset(
         splits=splits,
         calibration_folds=calibration_folds,
     )
+    (
+        robustness_folds,
+        robustness_summary,
+        robustness_diagnostics,
+    ) = _robustness_evaluation(
+        frame,
+        labels=labels,
+        random_state=random_state,
+        splits=splits,
+    )
     indices = np.arange(len(frame))
     train_indices, test_indices = train_test_split(
         indices,
@@ -959,7 +1280,7 @@ def evaluate_dataset(
         cross_validation_summary,
     )
     metrics = {
-        "report_version": 5,
+        "report_version": 6,
         "dataset": {
             "rows": len(frame),
             "target": TARGET,
@@ -985,6 +1306,7 @@ def evaluate_dataset(
         "feature_ablation": feature_ablation_metrics,
         "leakage_diagnostics": leakage_diagnostics,
         "probability_calibration": probability_calibration_metrics,
+        "robustness": robustness_diagnostics,
     }
     return EvaluationResult(
         metrics=metrics,
@@ -999,6 +1321,9 @@ def evaluate_dataset(
         probability_calibration_summary=probability_calibration_summary,
         probability_calibration_predictions=probability_calibration_predictions,
         probability_calibration_bins=probability_calibration_bins,
+        robustness_folds=robustness_folds,
+        robustness_summary=robustness_summary,
+        robustness_diagnostics=robustness_diagnostics,
         confusion=logistic_confusion,
         labels=labels,
     )

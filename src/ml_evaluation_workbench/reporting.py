@@ -350,3 +350,102 @@ def write_probability_calibration(
     finally:
         plt.close(figure)
     return destination
+
+
+def write_robustness_scores(
+    path: str | Path,
+    summary: pd.DataFrame,
+) -> Path:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    experiment_settings = {
+        "missing_values": (
+            "Injected Missing Values",
+            "Injected fraction of observed cells",
+        ),
+        "gaussian_noise": (
+            "Gaussian Feature Noise",
+            "Noise standard deviation multiplier",
+        ),
+    }
+    model_styles = {
+        "logistic_regression": ("Logistic regression", "#2563eb"),
+        "knn": ("5-nearest neighbors", "#059669"),
+    }
+    figure, axes = plt.subplots(
+        1,
+        len(experiment_settings),
+        figsize=(10.0, 4.5),
+        dpi=120,
+        sharey=True,
+    )
+    try:
+        for axis, (
+            perturbation,
+            (title, x_label),
+        ) in zip(
+            axes,
+            experiment_settings.items(),
+            strict=True,
+        ):
+            perturbation_rows = summary[
+                summary["perturbation"] == perturbation
+            ]
+            for model_name, (label, color) in model_styles.items():
+                model_rows = (
+                    perturbation_rows[
+                        perturbation_rows["model"] == model_name
+                    ]
+                    .sort_values("severity")
+                    .reset_index(drop=True)
+                )
+                axis.errorbar(
+                    model_rows["severity"],
+                    model_rows["macro_f1_mean"],
+                    yerr=model_rows["macro_f1_std"],
+                    marker="o",
+                    capsize=4,
+                    linewidth=1.5,
+                    color=color,
+                    label=label,
+                )
+            severities = sorted(
+                perturbation_rows["severity"].unique()
+            )
+            axis.set_title(title)
+            axis.set_xlabel(x_label)
+            axis.set_xticks(severities)
+            if perturbation == "missing_values":
+                axis.set_xticklabels(
+                    [f"{severity:.0%}" for severity in severities]
+                )
+            axis.set_ylim(0.0, 1.02)
+            axis.grid(axis="y", alpha=0.25)
+        axes[0].set_ylabel("Macro F1, mean ± fold standard deviation")
+        axes[1].legend(loc="lower left", fontsize=8)
+        figure.suptitle(
+            "Validation-Feature Robustness under Shared Outer Folds"
+        )
+        figure.tight_layout()
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".png",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        figure.savefig(
+            temporary,
+            format="png",
+            metadata={"Software": "ml-evaluation-workbench"},
+        )
+        os.replace(temporary, destination)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+    finally:
+        plt.close(figure)
+    return destination
