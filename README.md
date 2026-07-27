@@ -2,8 +2,8 @@
 
 [![CI](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml)
 
-Reproducible machine-learning baselines, evaluation artifacts, and concise
-interpretation using public datasets.
+Compare machine-learning baselines through shared splits, leakage-aware
+pipelines, inspectable predictions, and reproducible evaluation artifacts.
 
 ## Overview
 
@@ -18,6 +18,26 @@ policy remain fixed.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
+
+It is intended for ML engineers and reviewers who want a compact example of
+how to structure a controlled model comparison. Unlike the image-processing
+experiments elsewhere in this portfolio, this repository focuses on tabular
+classification evidence: baselines, split policy, fold variability, feature
+ablation, negative controls, and row-level errors.
+
+## Representative Result
+
+The same five stratified folds are used to compare each selected feature set.
+Both substantive models lose at least 0.284 mean macro F1 when either bill
+measurement is removed from the shared two-feature reference.
+
+![Feature-ablation macro F1](results/feature_ablation_scores.png)
+
+The per-fold values and paired differences are available in
+[`feature_ablation_folds.csv`](results/feature_ablation_folds.csv) and
+[`feature_ablation_summary.csv`](results/feature_ablation_summary.csv). This
+supports a bounded complementary-signal claim for the fixed dataset, models,
+and folds—not a causal feature-importance claim.
 
 ## Problem
 
@@ -36,7 +56,7 @@ This project keeps those decisions explicit:
 - Holdout metrics, fold-level evidence, row-level predictions, and figures are
   committed as reviewable artifacts.
 
-## Features
+## Key Features
 
 - Pinned, checksum-verified public dataset
 - Deterministic stratified train/test split
@@ -68,6 +88,8 @@ This project keeps those decisions explicit:
 ## Quick Start
 
 Python 3.10 or later is required.
+On Debian or Ubuntu, install `python3-venv` if `venv` reports that `ensurepip`
+is unavailable.
 
 ```bash
 git clone https://github.com/cab0a/ml-evaluation-workbench.git
@@ -75,28 +97,22 @@ cd ml-evaluation-workbench
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -e .
 ```
 
 Verify the committed dataset and run the evaluation:
 
 ```bash
 python examples/download_penguins.py --check
-ml-evaluation-workbench evaluate data/penguins.csv --output-dir results
+ml-evaluation-workbench evaluate data/penguins.csv \
+  --output-dir output/quickstart
 ```
 
-Run the tests:
-
-```bash
-python -m pytest
-```
-
-Regenerate and verify the committed sample artifacts:
-
-```bash
-python examples/run_demo.py
-python examples/run_demo.py --verify-only
-```
+The evaluation writes twenty artifacts under `output/quickstart/`. Start with
+`model_comparison.csv` for a compact model-level view,
+`feature_ablation_scores.png` for the representative comparison, and
+`predictions.csv` for row-level error inspection. Checksum-fixed reference
+copies are committed under `results/`.
 
 ## Usage
 
@@ -168,7 +184,9 @@ Robustness diagnostics: results/robustness_diagnostics.json
 Robustness plot: results/robustness.png
 ```
 
-## Dataset
+## Technical Design
+
+### Dataset
 
 The repository includes the simplified Palmer Penguins dataset maintained by
 Allison Horst, Alison Hill, and Kristen Gorman. It contains 344 rows and eight
@@ -184,7 +202,7 @@ from v0.6. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
-## Methodology
+## Evaluation Methodology
 
 1. Load the pinned CSV and preserve its source-row index.
 2. Create a 75/25 stratified holdout split with random state 42.
@@ -222,7 +240,7 @@ The preprocessing steps are part of each scikit-learn `Pipeline`, so their
 statistics are not estimated from the holdout partition or a fold's validation
 partition.
 
-## Output Schema
+## Generated Artifacts
 
 `metrics.json` contains:
 
@@ -291,7 +309,7 @@ interpretation boundary. `robustness.png` visualizes macro-F1 sensitivity.
 each fold. `checksums.sha256` fixes the bytes of all twenty reference
 artifacts.
 
-## Evaluation
+## Results
 
 | Model | Accuracy | Balanced Accuracy | Macro F1 |
 | --- | ---: | ---: | ---: |
@@ -338,8 +356,6 @@ Removing either measurement reduces mean macro F1 by at least 0.284 for KNN
 and 0.353 for logistic regression relative to the shared two-feature
 reference. Under these fixed models and folds, the measurements provide
 complementary predictive signal.
-
-![Feature-ablation macro F1](results/feature_ablation_scores.png)
 
 ### Leakage Diagnostics
 
@@ -439,6 +455,50 @@ between this controlled result and a general performance claim.
 - The result is not intended for field identification, ecological inference,
   or decisions affecting wildlife.
 
+## Reproducibility
+
+The dataset bytes, source revision, split parameters, model configurations,
+feature sets, and checksum manifest are committed. Regenerate the complete
+reference set in place and then verify it:
+
+```bash
+python examples/run_demo.py
+python examples/run_demo.py --verify-only
+```
+
+For a non-destructive check, select another directory:
+
+```bash
+python examples/run_demo.py --output-dir .work/generated
+python examples/run_demo.py --output-dir .work/generated --verify-only
+```
+
+JSON and CSV files are replaced atomically. Exact numeric artifacts are fixed
+by `results/checksums.sha256`; the figures are generated from the same recorded
+evaluation values.
+
+## Development and Testing
+
+```bash
+python -m pip install -e ".[dev]"
+python -m pytest
+```
+
+Tests cover dataset validation, holdout and cross-validation behavior,
+feature-ablation accounting, leakage diagnostics, report schemas, CLI
+arguments and errors, deterministic outputs, and checksum verification.
+GitHub Actions checks the installed CLI and dataset, runs the tests and a
+controlled evaluation on Python 3.10 through 3.14, and independently requires
+a Python 3.12 regeneration to match committed `results/`.
+
+## Compatibility
+
+Python 3.10 through 3.14 are exercised in CI. Version 0.6.0 is an alpha
+evaluation project, so consumers should treat the documented command,
+`metrics.json` report version, and CSV columns as versioned interfaces rather
+than as a 1.x stability guarantee. Release changes are recorded in
+[`CHANGELOG.md`](CHANGELOG.md).
+
 ## Project Structure
 
 ```text
@@ -506,3 +566,17 @@ ml-evaluation-workbench/
 Project code is licensed under the MIT License. See [LICENSE](LICENSE). The
 Palmer Penguins data are provided separately under CC0 1.0; see
 [data/README.md](data/README.md).
+
+---
+
+## 日本語概要
+
+このリポジトリは、固定した公開データと共通splitを使い、dummy、logistic
+regression、5-nearest neighborsを比較するML評価プロジェクトです。モデル評価の
+設計や結果の監査方法を確認したいMLエンジニアに役立ちます。
+
+fold-level metrics、row-level predictions、feature ablation、split integrity、
+shuffled-label negative controlに加え、probability calibration、validation-onlyの
+missing-value injection、Gaussian feature noiseによる感度評価を含みます。前処理は
+各training partition内でfitされ、数値成果物はSHA-256で検証できます。結果の適用範囲と
+制約の詳細は英語本文を参照してください。
