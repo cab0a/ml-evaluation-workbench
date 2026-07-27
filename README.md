@@ -1,5 +1,19 @@
 # ML Evaluation Workbench
 
+## 日本語概要
+
+このリポジトリは、固定した公開データと共通splitを使い、dummy、logistic
+regression、5-nearest neighborsを比較するML評価プロジェクトです。モデル評価の
+設計や結果の監査方法を確認したいMLエンジニアに役立ちます。
+
+fold-level metrics、row-level predictions、feature ablation、split integrity、
+shuffled-label negative controlに加え、probability calibration、validation-onlyの
+missing-value injection、Gaussian feature noiseによる感度評価を含みます。前処理は
+各training partition内でfitされ、数値成果物はSHA-256で検証できます。結果の適用範囲と
+制約の詳細は英語本文を参照してください。
+
+---
+
 [![CI](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml)
 
 Compare machine-learning baselines through shared splits, leakage-aware
@@ -566,17 +580,3 @@ ml-evaluation-workbench/
 Project code is licensed under the MIT License. See [LICENSE](LICENSE). The
 Palmer Penguins data are provided separately under CC0 1.0; see
 [data/README.md](data/README.md).
-
----
-
-## 日本語概要
-
-このリポジトリは、固定した公開データと共通splitを使い、dummy、logistic
-regression、5-nearest neighborsを比較するML評価プロジェクトです。モデル評価の
-設計や結果の監査方法を確認したいMLエンジニアに役立ちます。
-
-fold-level metrics、row-level predictions、feature ablation、split integrity、
-shuffled-label negative controlに加え、probability calibration、validation-onlyの
-missing-value injection、Gaussian feature noiseによる感度評価を含みます。前処理は
-各training partition内でfitされ、数値成果物はSHA-256で検証できます。結果の適用範囲と
-制約の詳細は英語本文を参照してください。
