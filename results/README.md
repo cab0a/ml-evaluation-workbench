@@ -1,10 +1,10 @@
-# Version 0.4 Evaluation Result
+# Version 0.5 Evaluation Result
 
 ## Question
 
-Do bill length and bill depth provide complementary signal under the existing
-controlled classifier comparison, and do basic split-integrity and
-shuffled-label diagnostics reveal an obvious leakage warning?
+How do sigmoid-calibrated probabilities compare with uncalibrated probabilities
+for the fixed logistic-regression and KNN classifiers under shared outer
+folds?
 
 ## Controlled Setup
 
@@ -20,10 +20,19 @@ shuffled-label diagnostics reveal an obvious leakage warning?
   these scores
 - Negative control: training labels shuffled within each fold while validation
   labels remain unchanged
+- Probability methods: uncalibrated and sigmoid calibrated
+- Calibration: three stratified inner folds drawn only from each outer
+  training partition
+- Probability metrics: multiclass log loss, multiclass Brier score, and
+  ten-bin top-label expected calibration error
 - Random state: 42; label-shuffle seed is 42 plus the one-based fold number
 
 The majority-class dummy remains in the primary comparison but is excluded
 from feature ablation because it does not use input features.
+
+The v0.4 feature-ablation and leakage evidence is retained as context. The
+v0.5 comparison does not tune the models or select a calibration method from
+the reported scores.
 
 ## Primary Comparison Reference
 
@@ -93,11 +102,44 @@ form of leakage. A shuffled-label control can miss duplicated entities,
 provenance leakage, time leakage, or a feature that directly encodes the target
 in a way not exercised by this small dataset.
 
+## Probability Calibration
+
+All values below are means across the same five outer validation folds.
+Multiclass Brier score is the mean summed squared error across all class
+probabilities. Top-label ECE uses ten equal-width confidence bins.
+
+| Model and method | Accuracy | Log Loss | Multiclass Brier | Top-Label ECE |
+| --- | ---: | ---: | ---: | ---: |
+| Logistic regression, uncalibrated | 0.944800 | 0.138743 | 0.072342 | 0.063897 |
+| Logistic regression, sigmoid | 0.936104 | 0.236341 | 0.116650 | 0.113640 |
+| 5-nearest neighbors, uncalibrated | 0.959292 | 0.280329 | 0.056488 | 0.030205 |
+| 5-nearest neighbors, sigmoid | 0.965089 | 0.132767 | 0.057062 | 0.071316 |
+
+For KNN, sigmoid calibration reduces mean log loss by 0.147563 and slightly
+increases mean accuracy, while its Brier score changes by +0.000574 and
+top-label ECE increases by 0.041112. For logistic regression, sigmoid
+calibration increases log loss by 0.097598 and also worsens the two other
+recorded probability-quality metrics.
+
+This mixed outcome is the main result: calibration quality depends on the
+model, metric, sample, and calibration design. The KNN log-loss reduction
+should not be generalized into a claim that sigmoid calibration is uniformly
+better.
+
+![Top-label reliability diagram](probability_calibration.png)
+
+`probability_calibration_predictions.csv` provides all 1,376 cross-fitted
+model-method predictions. `probability_calibration_bins.csv` records the
+points shown above, including empty bins. Fold-level scores and paired
+differences are available in `probability_calibration_folds.csv`,
+`probability_calibration_summary.csv`, and `metrics.json`.
+
 ## Continuity Artifacts
 
 The deterministic holdout, three-model comparison, fold-level scores,
 row-level predictions, and logistic-regression confusion matrix from v0.3 are
-retained and regenerated under report schema version 4.
+retained alongside the v0.4 diagnostics and regenerated under report schema
+version 5.
 
 ![Cross-validation fold scores](cross_validation_scores.png)
 
@@ -105,14 +147,21 @@ retained and regenerated under report schema version 4.
 
 ## Interpretation Boundary
 
-Version 0.4 adds diagnostic evidence, not a production leakage certification.
-The ablation and negative control reuse one five-fold partition and one public
-dataset revision. Their standard deviations describe observed fold variation
-and are not confidence intervals.
+Version 0.5 adds calibration evidence, not a production probability-quality
+guarantee. The calibration comparison, ablation, and negative control reuse one
+five-fold outer partition and one public dataset revision. Their standard
+deviations describe observed fold variation and are not confidence intervals.
+
+The reliability diagram uses top-label confidence rather than classwise
+calibration and depends on ten fixed bins. Empty or sparsely populated bins
+carry little evidence. Only sigmoid calibration with three inner folds is
+evaluated; isotonic calibration, repeated splits, independent datasets, and
+deployment shift are outside this version's scope.
 
 The committed artifacts demonstrate a deterministic implementation of feature
-ablation, split-integrity checks, and a negative control. They are not a
-benchmark claim, causal feature-importance result, or ecological conclusion.
+ablation, split-integrity checks, a negative control, and cross-fitted
+probability diagnostics. They are not a benchmark claim, causal
+feature-importance result, deployment guarantee, or ecological conclusion.
 
 ## Reproduction
 

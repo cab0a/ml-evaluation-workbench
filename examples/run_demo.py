@@ -1,4 +1,4 @@
-"""Regenerate or verify the committed v0.4 evaluation artifacts."""
+"""Regenerate or verify the committed v0.5 evaluation artifacts."""
 
 from __future__ import annotations
 
@@ -25,6 +25,11 @@ ARTIFACT_NAMES = (
     "metrics.json",
     "model_comparison.csv",
     "predictions.csv",
+    "probability_calibration.png",
+    "probability_calibration_bins.csv",
+    "probability_calibration_folds.csv",
+    "probability_calibration_predictions.csv",
+    "probability_calibration_summary.csv",
 )
 MANIFEST_NAME = "checksums.sha256"
 
@@ -106,6 +111,8 @@ def main() -> int:
             "0.25",
             "--cv-folds",
             "5",
+            "--calibration-folds",
+            "3",
         ]
     )
     if status != 0:
@@ -168,6 +175,34 @@ def main() -> int:
             raise SystemExit(
                 f"Shuffled-label control did not reduce {model_name} macro F1"
             )
+    calibration = metrics["probability_calibration"]
+    if calibration["outer_folds"] != 5:
+        raise SystemExit(
+            "Calibration outer-fold mismatch: "
+            f"expected 5, got {calibration['outer_folds']}"
+        )
+    if calibration["inner_calibration"]["folds"] != 3:
+        raise SystemExit(
+            "Calibration inner-fold mismatch: expected 3, got "
+            f"{calibration['inner_calibration']['folds']}"
+        )
+    for model_name in ("logistic_regression", "knn"):
+        for method in ("uncalibrated", "sigmoid"):
+            method_metrics = calibration["models_summary"][model_name][
+                method
+            ]
+            for score_name in (
+                "accuracy",
+                "log_loss",
+                "multiclass_brier",
+                "top_label_ece",
+            ):
+                value = method_metrics[score_name]["mean"]
+                if not isinstance(value, (int, float)) or value < 0:
+                    raise SystemExit(
+                        "Invalid calibration metric for "
+                        f"{model_name}/{method}/{score_name}: {value}"
+                    )
     manifest = _write_manifest(args.output_dir)
     print(f"Checksums: {manifest}")
     return 0

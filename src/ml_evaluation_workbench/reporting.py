@@ -261,3 +261,92 @@ def write_feature_ablation_scores(
     finally:
         plt.close(figure)
     return destination
+
+
+def write_probability_calibration(
+    path: str | Path,
+    bins: pd.DataFrame,
+) -> Path:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    model_titles = {
+        "logistic_regression": "Logistic regression",
+        "knn": "5-nearest neighbors",
+    }
+    method_styles = {
+        "uncalibrated": ("Uncalibrated", "#6b7280", "o"),
+        "sigmoid": ("Sigmoid calibrated", "#d97706", "s"),
+    }
+    figure, axes = plt.subplots(
+        1,
+        len(model_titles),
+        figsize=(10.0, 4.5),
+        dpi=120,
+        sharex=True,
+        sharey=True,
+    )
+    try:
+        for axis, (model_name, title) in zip(
+            axes,
+            model_titles.items(),
+            strict=True,
+        ):
+            axis.plot(
+                [0.0, 1.0],
+                [0.0, 1.0],
+                color="#9ca3af",
+                linestyle="--",
+                linewidth=1.0,
+                label="Perfect calibration",
+            )
+            for calibration_name, (
+                label,
+                color,
+                marker,
+            ) in method_styles.items():
+                method_rows = bins[
+                    (bins["model"] == model_name)
+                    & (bins["calibration"] == calibration_name)
+                    & (bins["sample_count"] > 0)
+                ]
+                axis.plot(
+                    method_rows["mean_confidence"],
+                    method_rows["empirical_accuracy"],
+                    marker=marker,
+                    linewidth=1.5,
+                    color=color,
+                    label=label,
+                )
+            axis.set_title(title)
+            axis.set_xlabel("Mean predicted confidence")
+            axis.set_xlim(0.0, 1.02)
+            axis.set_ylim(0.0, 1.02)
+            axis.grid(alpha=0.25)
+        axes[0].set_ylabel("Empirical accuracy")
+        axes[1].legend(loc="lower right", fontsize=8)
+        figure.suptitle(
+            "Top-Label Reliability under Shared Outer Folds"
+        )
+        figure.tight_layout()
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".png",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        figure.savefig(
+            temporary,
+            format="png",
+            metadata={"Software": "ml-evaluation-workbench"},
+        )
+        os.replace(temporary, destination)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+    finally:
+        plt.close(figure)
+    return destination

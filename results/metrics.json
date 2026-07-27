@@ -1,6 +1,6 @@
 {
-  "report_version": 4,
-  "project_version": "0.4.0",
+  "report_version": 5,
+  "project_version": "0.5.0",
   "dataset": {
     "source": "data/penguins.csv",
     "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
@@ -624,5 +624,200 @@
         }
       }
     }
+  },
+  "probability_calibration": {
+    "strategy": "shared_outer_stratified_k_fold",
+    "outer_folds": 5,
+    "models": [
+      "logistic_regression",
+      "knn"
+    ],
+    "methods": [
+      "uncalibrated",
+      "sigmoid"
+    ],
+    "inner_calibration": {
+      "method": "sigmoid",
+      "folds": 3,
+      "scope": "outer_training_partition_only",
+      "shuffle": true,
+      "seed_rule": "random_state_plus_outer_fold",
+      "ensemble": true
+    },
+    "metrics": {
+      "log_loss": "multiclass_cross_entropy_lower_is_better",
+      "multiclass_brier": "mean_sum_of_squared_class_probability_errors_lower_is_better",
+      "top_label_ece": "ten_equal_width_confidence_bins_lower_is_better",
+      "accuracy": "argmax_class_accuracy_higher_is_better"
+    },
+    "models_summary": {
+      "logistic_regression": {
+        "uncalibrated": {
+          "accuracy": {
+            "mean": 0.9448,
+            "std": 0.03351,
+            "min": 0.884058,
+            "max": 0.985507
+          },
+          "log_loss": {
+            "mean": 0.138743,
+            "std": 0.033994,
+            "min": 0.107186,
+            "max": 0.199518
+          },
+          "multiclass_brier": {
+            "mean": 0.072342,
+            "std": 0.024263,
+            "min": 0.054906,
+            "max": 0.118815
+          },
+          "top_label_ece": {
+            "mean": 0.063897,
+            "std": 0.01555,
+            "min": 0.037099,
+            "max": 0.08291
+          }
+        },
+        "sigmoid": {
+          "accuracy": {
+            "mean": 0.936104,
+            "std": 0.017244,
+            "min": 0.913043,
+            "max": 0.956522
+          },
+          "log_loss": {
+            "mean": 0.236341,
+            "std": 0.034031,
+            "min": 0.183865,
+            "max": 0.28796
+          },
+          "multiclass_brier": {
+            "mean": 0.11665,
+            "std": 0.019986,
+            "min": 0.085419,
+            "max": 0.147041
+          },
+          "top_label_ece": {
+            "mean": 0.11364,
+            "std": 0.030438,
+            "min": 0.060023,
+            "max": 0.151312
+          }
+        }
+      },
+      "knn": {
+        "uncalibrated": {
+          "accuracy": {
+            "mean": 0.959292,
+            "std": 0.010882,
+            "min": 0.942029,
+            "max": 0.971014
+          },
+          "log_loss": {
+            "mean": 0.280329,
+            "std": 0.2427,
+            "min": 0.066646,
+            "max": 0.588246
+          },
+          "multiclass_brier": {
+            "mean": 0.056488,
+            "std": 0.012726,
+            "min": 0.035942,
+            "max": 0.070725
+          },
+          "top_label_ece": {
+            "mean": 0.030205,
+            "std": 0.009212,
+            "min": 0.02029,
+            "max": 0.043478
+          }
+        },
+        "sigmoid": {
+          "accuracy": {
+            "mean": 0.965089,
+            "std": 0.011692,
+            "min": 0.955882,
+            "max": 0.985507
+          },
+          "log_loss": {
+            "mean": 0.132767,
+            "std": 0.008504,
+            "min": 0.116822,
+            "max": 0.140463
+          },
+          "multiclass_brier": {
+            "mean": 0.057062,
+            "std": 0.009906,
+            "min": 0.037374,
+            "max": 0.063506
+          },
+          "top_label_ece": {
+            "mean": 0.071316,
+            "std": 0.011877,
+            "min": 0.05277,
+            "max": 0.085472
+          }
+        }
+      }
+    },
+    "paired_difference": {
+      "logistic_regression": {
+        "sigmoid_minus_uncalibrated": {
+          "accuracy": {
+            "mean": -0.008696,
+            "std": 0.037345,
+            "min": -0.072464,
+            "max": 0.043478
+          },
+          "log_loss": {
+            "mean": 0.097598,
+            "std": 0.016248,
+            "min": 0.072591,
+            "max": 0.115909
+          },
+          "multiclass_brier": {
+            "mean": 0.044308,
+            "std": 0.013358,
+            "min": 0.028226,
+            "max": 0.059477
+          },
+          "top_label_ece": {
+            "mean": 0.049743,
+            "std": 0.027724,
+            "min": 0.001733,
+            "max": 0.078692
+          }
+        }
+      },
+      "knn": {
+        "sigmoid_minus_uncalibrated": {
+          "accuracy": {
+            "mean": 0.005797,
+            "std": 0.0071,
+            "min": 0.0,
+            "max": 0.014493
+          },
+          "log_loss": {
+            "mean": -0.147563,
+            "std": 0.236636,
+            "min": -0.447783,
+            "max": 0.063193
+          },
+          "multiclass_brier": {
+            "mean": 0.000574,
+            "std": 0.006539,
+            "min": -0.007219,
+            "max": 0.012279
+          },
+          "top_label_ece": {
+            "mean": 0.041112,
+            "std": 0.017995,
+            "min": 0.009292,
+            "max": 0.060959
+          }
+        }
+      }
+    },
+    "interpretation": "diagnostic_comparison_not_a_guarantee_that_calibration_improves"
   }
 }

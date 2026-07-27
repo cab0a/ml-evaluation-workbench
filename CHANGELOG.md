@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0] - 2026-07-27
+
+### Added
+
+- Shared-outer-fold comparison of uncalibrated and sigmoid-calibrated
+  probabilities for logistic regression and the fixed KNN comparator
+- Training-only three-fold calibration inside every outer training partition
+- Fold-level accuracy, multiclass log loss, multiclass Brier score, and
+  ten-bin top-label expected calibration error
+- Cross-fitted class probabilities with source-row references
+- Reliability-bin evidence, compact summaries, paired method differences, and
+  a top-label reliability figure
+
+### Changed
+
+- Evaluation report schema updated to version 5
+- Reproduction manifest expanded to sixteen reference artifacts
+- CLI extended with an explicit inner calibration-fold parameter
+- Documentation expanded with metric-dependent calibration results and
+  probability-quality limitations
+
 ## [0.4.0] - 2026-07-23
 
 ### Added

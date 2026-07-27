@@ -26,6 +26,18 @@ def test_evaluation_is_deterministic(penguins_frame) -> None:
         second.leakage_diagnostic_folds
     )
     assert first.leakage_diagnostics == second.leakage_diagnostics
+    assert first.probability_calibration_folds.equals(
+        second.probability_calibration_folds
+    )
+    assert first.probability_calibration_summary.equals(
+        second.probability_calibration_summary
+    )
+    assert first.probability_calibration_predictions.equals(
+        second.probability_calibration_predictions
+    )
+    assert first.probability_calibration_bins.equals(
+        second.probability_calibration_bins
+    )
     assert np.array_equal(first.confusion, second.confusion)
 
 
@@ -230,6 +242,108 @@ def test_leakage_diagnostics_check_partitions_and_negative_control(
         assert difference > 0.4
 
 
+def test_probability_calibration_uses_cross_fitted_probabilities(
+    penguins_frame,
+) -> None:
+    result = evaluate_dataset(penguins_frame)
+    folds = result.probability_calibration_folds
+    predictions = result.probability_calibration_predictions
+    summary = result.metrics["probability_calibration"]
+
+    assert summary["strategy"] == "shared_outer_stratified_k_fold"
+    assert summary["outer_folds"] == 5
+    assert summary["inner_calibration"] == {
+        "method": "sigmoid",
+        "folds": 3,
+        "scope": "outer_training_partition_only",
+        "shuffle": True,
+        "seed_rule": "random_state_plus_outer_fold",
+        "ensemble": True,
+    }
+    assert len(folds) == 20
+    assert len(predictions) == 344 * 4
+    assert set(folds["model"]) == {"logistic_regression", "knn"}
+    assert set(folds["calibration"]) == {"uncalibrated", "sigmoid"}
+    for model_name in ("logistic_regression", "knn"):
+        primary_folds = (
+            result.cross_validation_folds[
+                result.cross_validation_folds["model"] == model_name
+            ]
+            .sort_values("fold")
+            .reset_index(drop=True)
+        )
+        uncalibrated_folds = (
+            folds[
+                (folds["model"] == model_name)
+                & (folds["calibration"] == "uncalibrated")
+            ]
+            .sort_values("fold")
+            .reset_index(drop=True)
+        )
+        assert np.array_equal(
+            uncalibrated_folds["validation_rows"],
+            primary_folds["validation_rows"],
+        )
+        assert np.allclose(
+            uncalibrated_folds["accuracy"],
+            primary_folds["accuracy"],
+        )
+        for calibration_name in ("uncalibrated", "sigmoid"):
+            method_rows = predictions[
+                (predictions["model"] == model_name)
+                & (predictions["calibration"] == calibration_name)
+            ]
+            assert len(method_rows) == 344
+            assert method_rows["source_row"].nunique() == 344
+            probability_columns = [
+                "probability_adelie",
+                "probability_chinstrap",
+                "probability_gentoo",
+            ]
+            assert np.allclose(
+                method_rows[probability_columns].sum(axis=1),
+                1.0,
+                atol=2e-6,
+            )
+
+
+def test_probability_calibration_metrics_and_bins_are_auditable(
+    penguins_frame,
+) -> None:
+    result = evaluate_dataset(penguins_frame)
+    folds = result.probability_calibration_folds
+    bins = result.probability_calibration_bins
+    summary = result.metrics["probability_calibration"]
+
+    assert len(bins) == 40
+    assert set(bins["bin"]) == set(range(1, 11))
+    assert int(bins["sample_count"].sum()) == 344 * 4
+    for model_name in ("logistic_regression", "knn"):
+        for calibration_name in ("uncalibrated", "sigmoid"):
+            model_rows = folds[
+                (folds["model"] == model_name)
+                & (folds["calibration"] == calibration_name)
+            ]
+            recorded = summary["models_summary"][model_name][
+                calibration_name
+            ]
+            for score_name in (
+                "accuracy",
+                "log_loss",
+                "multiclass_brier",
+                "top_label_ece",
+            ):
+                assert recorded[score_name]["mean"] == round(
+                    float(model_rows[score_name].mean()),
+                    6,
+                )
+                assert np.isfinite(model_rows[score_name]).all()
+        assert (
+            "sigmoid_minus_uncalibrated"
+            in summary["paired_difference"][model_name]
+        )
+
+
 @pytest.mark.parametrize("test_size", [0.0, 1.0, -0.1, 1.1])
 def test_invalid_test_size_is_rejected(penguins_frame, test_size: float) -> None:
     with pytest.raises(ValueError, match="test_size"):
@@ -243,3 +357,15 @@ def test_invalid_cross_validation_fold_count_is_rejected(
 ) -> None:
     with pytest.raises(ValueError, match="cv_folds"):
         evaluate_dataset(penguins_frame, cv_folds=cv_folds)
+
+
+@pytest.mark.parametrize("calibration_folds", [0, 1, 101])
+def test_invalid_calibration_fold_count_is_rejected(
+    penguins_frame,
+    calibration_folds: int,
+) -> None:
+    with pytest.raises(ValueError, match="calibration_folds"):
+        evaluate_dataset(
+            penguins_frame,
+            calibration_folds=calibration_folds,
+        )

@@ -1,0 +1,5 @@
+model,calibration,accuracy_mean,accuracy_std,log_loss_mean,log_loss_std,multiclass_brier_mean,multiclass_brier_std,top_label_ece_mean,top_label_ece_std
+logistic_regression,uncalibrated,0.9448,0.03351,0.138743,0.033994,0.072342,0.024263,0.063897,0.01555
+logistic_regression,sigmoid,0.936104,0.017244,0.236341,0.034031,0.11665,0.019986,0.11364,0.030438
+knn,uncalibrated,0.959292,0.010882,0.280329,0.2427,0.056488,0.012726,0.030205,0.009212
+knn,sigmoid,0.965089,0.011692,0.132767,0.008504,0.057062,0.009906,0.071316,0.011877

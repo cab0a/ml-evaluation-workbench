@@ -16,6 +16,7 @@ from .reporting import (
     write_csv,
     write_feature_ablation_scores,
     write_json,
+    write_probability_calibration,
     write_predictions,
 )
 
@@ -29,6 +30,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         random_state=args.random_state,
         test_size=args.test_size,
         cv_folds=args.cv_folds,
+        calibration_folds=args.calibration_folds,
     )
     dataset_summary = result.metrics["dataset"]
     result.metrics = {
@@ -45,6 +47,9 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "cross_validation": result.metrics["cross_validation"],
         "feature_ablation": result.metrics["feature_ablation"],
         "leakage_diagnostics": result.metrics["leakage_diagnostics"],
+        "probability_calibration": result.metrics[
+            "probability_calibration"
+        ],
     }
 
     metrics_path = write_json(output_dir / "metrics.json", result.metrics)
@@ -89,6 +94,26 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         output_dir / "leakage_diagnostics.json",
         result.leakage_diagnostics,
     )
+    calibration_folds_path = write_csv(
+        output_dir / "probability_calibration_folds.csv",
+        result.probability_calibration_folds,
+    )
+    calibration_summary_path = write_csv(
+        output_dir / "probability_calibration_summary.csv",
+        result.probability_calibration_summary,
+    )
+    calibration_predictions_path = write_csv(
+        output_dir / "probability_calibration_predictions.csv",
+        result.probability_calibration_predictions,
+    )
+    calibration_bins_path = write_csv(
+        output_dir / "probability_calibration_bins.csv",
+        result.probability_calibration_bins,
+    )
+    calibration_plot_path = write_probability_calibration(
+        output_dir / "probability_calibration.png",
+        result.probability_calibration_bins,
+    )
 
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
@@ -105,6 +130,9 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     ]["shuffled"]["mean"]
     knn_shuffled_macro_f1 = shuffled_models["knn"]["macro_f1"]["shuffled"][
         "mean"
+    ]
+    calibration_models = result.metrics["probability_calibration"][
+        "models_summary"
     ]
     print(f"Dataset rows: {result.metrics['dataset']['rows']}")
     print(f"Training rows: {result.metrics['split']['train_rows']}")
@@ -145,6 +173,21 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         else "failed"
     )
     print(f"Split integrity check: {split_status}")
+    for model_name in ("logistic_regression", "knn"):
+        uncalibrated_log_loss = calibration_models[model_name][
+            "uncalibrated"
+        ]["log_loss"]["mean"]
+        calibrated_log_loss = calibration_models[model_name]["sigmoid"][
+            "log_loss"
+        ]["mean"]
+        print(
+            f"{model_name} CV log loss, uncalibrated: "
+            f"{uncalibrated_log_loss:.3f}"
+        )
+        print(
+            f"{model_name} CV log loss, sigmoid calibrated: "
+            f"{calibrated_log_loss:.3f}"
+        )
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
     print(f"Confusion matrix: {confusion_path}")
@@ -156,6 +199,14 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     print(f"Feature ablation scores: {feature_ablation_plot_path}")
     print(f"Leakage diagnostic folds: {leakage_folds_path}")
     print(f"Leakage diagnostics: {leakage_diagnostics_path}")
+    print(f"Probability calibration folds: {calibration_folds_path}")
+    print(f"Probability calibration summary: {calibration_summary_path}")
+    print(
+        "Probability calibration predictions: "
+        f"{calibration_predictions_path}"
+    )
+    print(f"Probability calibration bins: {calibration_bins_path}")
+    print(f"Probability calibration plot: {calibration_plot_path}")
     return 0
 
 
@@ -193,6 +244,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=5,
         help="Number of stratified cross-validation folds (default: 5)",
+    )
+    evaluate_parser.add_argument(
+        "--calibration-folds",
+        type=int,
+        default=3,
+        help=(
+            "Inner folds for training-only sigmoid calibration "
+            "(default: 3)"
+        ),
     )
     evaluate_parser.set_defaults(handler=_cmd_evaluate)
     return parser

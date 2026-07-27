@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.calibration import CalibratedClassifierCV
 from sklearn.dummy import DummyClassifier
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
@@ -15,6 +16,7 @@ from sklearn.metrics import (
     balanced_accuracy_score,
     confusion_matrix,
     f1_score,
+    log_loss,
     recall_score,
 )
 from sklearn.model_selection import StratifiedKFold, train_test_split
@@ -48,6 +50,14 @@ FEATURE_SETS = {
     "both_bill_measurements": FEATURES,
 }
 REFERENCE_FEATURE_SET = "both_bill_measurements"
+CALIBRATION_NAMES = ("uncalibrated", "sigmoid")
+PROBABILITY_SCORE_NAMES = (
+    "accuracy",
+    "log_loss",
+    "multiclass_brier",
+    "top_label_ece",
+)
+CALIBRATION_BIN_COUNT = 10
 
 
 @dataclass(slots=True)
@@ -60,6 +70,10 @@ class EvaluationResult:
     feature_ablation_summary: pd.DataFrame
     leakage_diagnostic_folds: pd.DataFrame
     leakage_diagnostics: dict[str, Any]
+    probability_calibration_folds: pd.DataFrame
+    probability_calibration_summary: pd.DataFrame
+    probability_calibration_predictions: pd.DataFrame
+    probability_calibration_bins: pd.DataFrame
     confusion: np.ndarray
     labels: tuple[str, ...]
 
@@ -514,12 +528,301 @@ def _leakage_diagnostics(
     return diagnostic_folds, diagnostics
 
 
+def _probability_metrics(
+    actual: pd.Series,
+    probabilities: np.ndarray,
+    labels: tuple[str, ...],
+    *,
+    bin_count: int = CALIBRATION_BIN_COUNT,
+) -> dict[str, float]:
+    actual_values = actual.astype(str).to_numpy()
+    label_to_index = {
+        label: index for index, label in enumerate(labels)
+    }
+    actual_indices = np.array(
+        [label_to_index[value] for value in actual_values],
+        dtype=int,
+    )
+    predicted_indices = np.argmax(probabilities, axis=1)
+    confidence = np.max(probabilities, axis=1)
+    correct = predicted_indices == actual_indices
+    one_hot = np.eye(len(labels), dtype=float)[actual_indices]
+    bin_indices = np.minimum(
+        (confidence * bin_count).astype(int),
+        bin_count - 1,
+    )
+    ece = 0.0
+    for bin_index in range(bin_count):
+        mask = bin_indices == bin_index
+        if not np.any(mask):
+            continue
+        ece += float(np.mean(mask)) * abs(
+            float(np.mean(correct[mask]))
+            - float(np.mean(confidence[mask]))
+        )
+    return {
+        "accuracy": round(float(np.mean(correct)), 6),
+        "log_loss": round(
+            float(log_loss(actual_values, probabilities, labels=list(labels))),
+            6,
+        ),
+        "multiclass_brier": round(
+            float(np.mean(np.sum((probabilities - one_hot) ** 2, axis=1))),
+            6,
+        ),
+        "top_label_ece": round(ece, 6),
+    }
+
+
+def _aligned_probabilities(
+    model: Any,
+    features: pd.DataFrame,
+    labels: tuple[str, ...],
+) -> np.ndarray:
+    probabilities = np.asarray(model.predict_proba(features), dtype=float)
+    model_labels = [str(value) for value in model.classes_]
+    column_indices = [model_labels.index(label) for label in labels]
+    return probabilities[:, column_indices]
+
+
+def _calibration_bins(
+    predictions: pd.DataFrame,
+    *,
+    bin_count: int = CALIBRATION_BIN_COUNT,
+) -> pd.DataFrame:
+    rows: list[dict[str, Any]] = []
+    for model_name in DIAGNOSTIC_MODEL_NAMES:
+        for calibration_name in CALIBRATION_NAMES:
+            model_rows = predictions[
+                (predictions["model"] == model_name)
+                & (predictions["calibration"] == calibration_name)
+            ]
+            confidence = model_rows["confidence"].to_numpy(dtype=float)
+            correct = model_rows["correct"].to_numpy(dtype=bool)
+            bin_indices = np.minimum(
+                (confidence * bin_count).astype(int),
+                bin_count - 1,
+            )
+            for bin_index in range(bin_count):
+                mask = bin_indices == bin_index
+                sample_count = int(np.sum(mask))
+                rows.append(
+                    {
+                        "model": model_name,
+                        "calibration": calibration_name,
+                        "bin": bin_index + 1,
+                        "lower_bound": round(bin_index / bin_count, 6),
+                        "upper_bound": round(
+                            (bin_index + 1) / bin_count,
+                            6,
+                        ),
+                        "sample_count": sample_count,
+                        "mean_confidence": (
+                            round(float(np.mean(confidence[mask])), 6)
+                            if sample_count
+                            else None
+                        ),
+                        "empirical_accuracy": (
+                            round(float(np.mean(correct[mask])), 6)
+                            if sample_count
+                            else None
+                        ),
+                        "absolute_gap": (
+                            round(
+                                abs(
+                                    float(np.mean(correct[mask]))
+                                    - float(np.mean(confidence[mask]))
+                                ),
+                                6,
+                            )
+                            if sample_count
+                            else None
+                        ),
+                    }
+                )
+    return pd.DataFrame(rows)
+
+
+def _probability_calibration(
+    frame: pd.DataFrame,
+    *,
+    labels: tuple[str, ...],
+    random_state: int,
+    splits: tuple[tuple[np.ndarray, np.ndarray], ...],
+    calibration_folds: int,
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    features = frame[list(FEATURES)]
+    target = frame[TARGET]
+    fold_rows: list[dict[str, Any]] = []
+    prediction_rows: list[dict[str, Any]] = []
+
+    for fold, (train_indices, validation_indices) in enumerate(
+        splits,
+        start=1,
+    ):
+        inner_splitter = StratifiedKFold(
+            n_splits=calibration_folds,
+            shuffle=True,
+            random_state=random_state + fold,
+        )
+        for model_name in DIAGNOSTIC_MODEL_NAMES:
+            base_model = _models(random_state)[model_name]
+            models = {
+                "uncalibrated": base_model,
+                "sigmoid": CalibratedClassifierCV(
+                    estimator=_models(random_state)[model_name],
+                    method="sigmoid",
+                    cv=inner_splitter,
+                    ensemble=True,
+                ),
+            }
+            for calibration_name, model in models.items():
+                model.fit(
+                    features.iloc[train_indices],
+                    target.iloc[train_indices],
+                )
+                probabilities = _aligned_probabilities(
+                    model,
+                    features.iloc[validation_indices],
+                    labels,
+                )
+                scores = _probability_metrics(
+                    target.iloc[validation_indices],
+                    probabilities,
+                    labels,
+                )
+                fold_rows.append(
+                    {
+                        "fold": fold,
+                        "model": model_name,
+                        "calibration": calibration_name,
+                        "train_rows": len(train_indices),
+                        "validation_rows": len(validation_indices),
+                        **scores,
+                    }
+                )
+                predicted_indices = np.argmax(probabilities, axis=1)
+                predicted_labels = np.asarray(labels)[predicted_indices]
+                confidence = np.max(probabilities, axis=1)
+                for row_offset, frame_index in enumerate(validation_indices):
+                    row: dict[str, Any] = {
+                        "source_row": int(frame_index) + 2,
+                        "fold": fold,
+                        "model": model_name,
+                        "calibration": calibration_name,
+                        "actual": str(target.iloc[frame_index]),
+                        "predicted": str(predicted_labels[row_offset]),
+                        "confidence": round(
+                            float(confidence[row_offset]),
+                            6,
+                        ),
+                        "correct": bool(
+                            predicted_labels[row_offset]
+                            == str(target.iloc[frame_index])
+                        ),
+                    }
+                    row.update(
+                        {
+                            f"probability_{label.lower()}": round(
+                                float(probabilities[row_offset, label_index]),
+                                6,
+                            )
+                            for label_index, label in enumerate(labels)
+                        }
+                    )
+                    prediction_rows.append(row)
+
+    fold_scores = pd.DataFrame(fold_rows)
+    predictions = (
+        pd.DataFrame(prediction_rows)
+        .sort_values(["model", "calibration", "source_row"])
+        .reset_index(drop=True)
+    )
+    summary_rows: list[dict[str, Any]] = []
+    model_summaries: dict[str, Any] = {}
+    paired_differences: dict[str, Any] = {}
+    for model_name in DIAGNOSTIC_MODEL_NAMES:
+        model_summaries[model_name] = {}
+        for calibration_name in CALIBRATION_NAMES:
+            method_rows = fold_scores[
+                (fold_scores["model"] == model_name)
+                & (fold_scores["calibration"] == calibration_name)
+            ]
+            score_summaries = {
+                score_name: _score_summary(method_rows[score_name])
+                for score_name in PROBABILITY_SCORE_NAMES
+            }
+            model_summaries[model_name][
+                calibration_name
+            ] = score_summaries
+            summary_row: dict[str, Any] = {
+                "model": model_name,
+                "calibration": calibration_name,
+            }
+            for score_name, score_summary in score_summaries.items():
+                summary_row[f"{score_name}_mean"] = score_summary["mean"]
+                summary_row[f"{score_name}_std"] = score_summary["std"]
+            summary_rows.append(summary_row)
+
+        by_method = fold_scores[
+            fold_scores["model"] == model_name
+        ].pivot(index="fold", columns="calibration")
+        paired_differences[model_name] = {
+            "sigmoid_minus_uncalibrated": {
+                score_name: _score_summary(
+                    by_method[score_name]["sigmoid"]
+                    - by_method[score_name]["uncalibrated"]
+                )
+                for score_name in PROBABILITY_SCORE_NAMES
+            }
+        }
+
+    bins = _calibration_bins(predictions)
+    summary = {
+        "strategy": "shared_outer_stratified_k_fold",
+        "outer_folds": len(splits),
+        "models": list(DIAGNOSTIC_MODEL_NAMES),
+        "methods": list(CALIBRATION_NAMES),
+        "inner_calibration": {
+            "method": "sigmoid",
+            "folds": calibration_folds,
+            "scope": "outer_training_partition_only",
+            "shuffle": True,
+            "seed_rule": "random_state_plus_outer_fold",
+            "ensemble": True,
+        },
+        "metrics": {
+            "log_loss": "multiclass_cross_entropy_lower_is_better",
+            "multiclass_brier": (
+                "mean_sum_of_squared_class_probability_errors_lower_is_better"
+            ),
+            "top_label_ece": (
+                "ten_equal_width_confidence_bins_lower_is_better"
+            ),
+            "accuracy": "argmax_class_accuracy_higher_is_better",
+        },
+        "models_summary": model_summaries,
+        "paired_difference": paired_differences,
+        "interpretation": (
+            "diagnostic_comparison_not_a_guarantee_that_calibration_improves"
+        ),
+    }
+    return (
+        fold_scores,
+        pd.DataFrame(summary_rows),
+        predictions,
+        bins,
+        summary,
+    )
+
+
 def evaluate_dataset(
     frame: pd.DataFrame,
     *,
     random_state: int = 42,
     test_size: float = 0.25,
     cv_folds: int = 5,
+    calibration_folds: int = 3,
 ) -> EvaluationResult:
     if not 0.0 < test_size < 1.0:
         raise ValueError("test_size must be greater than 0 and less than 1")
@@ -538,6 +841,8 @@ def evaluate_dataset(
             "cv_folds must not exceed the smallest class count "
             f"({smallest_class})"
         )
+    if calibration_folds < 2:
+        raise ValueError("calibration_folds must be at least 2")
 
     labels = tuple(sorted(str(value) for value in frame[TARGET].unique()))
     splits = _stratified_splits(
@@ -545,6 +850,16 @@ def evaluate_dataset(
         random_state=random_state,
         cv_folds=cv_folds,
     )
+    smallest_outer_training_class = min(
+        int(frame.iloc[train_indices][TARGET].value_counts().min())
+        for train_indices, _ in splits
+    )
+    if calibration_folds > smallest_outer_training_class:
+        raise ValueError(
+            "calibration_folds must not exceed the smallest class count "
+            "in an outer training partition "
+            f"({smallest_outer_training_class})"
+        )
     cross_validation_folds, cross_validation_summary = _cross_validate(
         frame,
         labels=labels,
@@ -567,6 +882,19 @@ def evaluate_dataset(
         random_state=random_state,
         splits=splits,
         observed_fold_scores=cross_validation_folds,
+    )
+    (
+        probability_calibration_folds,
+        probability_calibration_summary,
+        probability_calibration_predictions,
+        probability_calibration_bins,
+        probability_calibration_metrics,
+    ) = _probability_calibration(
+        frame,
+        labels=labels,
+        random_state=random_state,
+        splits=splits,
+        calibration_folds=calibration_folds,
     )
     indices = np.arange(len(frame))
     train_indices, test_indices = train_test_split(
@@ -631,7 +959,7 @@ def evaluate_dataset(
         cross_validation_summary,
     )
     metrics = {
-        "report_version": 4,
+        "report_version": 5,
         "dataset": {
             "rows": len(frame),
             "target": TARGET,
@@ -656,6 +984,7 @@ def evaluate_dataset(
         "cross_validation": cross_validation_summary,
         "feature_ablation": feature_ablation_metrics,
         "leakage_diagnostics": leakage_diagnostics,
+        "probability_calibration": probability_calibration_metrics,
     }
     return EvaluationResult(
         metrics=metrics,
@@ -666,6 +995,10 @@ def evaluate_dataset(
         feature_ablation_summary=feature_ablation_summary,
         leakage_diagnostic_folds=leakage_diagnostic_folds,
         leakage_diagnostics=leakage_diagnostics,
+        probability_calibration_folds=probability_calibration_folds,
+        probability_calibration_summary=probability_calibration_summary,
+        probability_calibration_predictions=probability_calibration_predictions,
+        probability_calibration_bins=probability_calibration_bins,
         confusion=logistic_confusion,
         labels=labels,
     )

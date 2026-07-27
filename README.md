@@ -9,12 +9,12 @@ interpretation using public datasets.
 
 ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
 
-**Question → Controlled Comparison → Ablation → Diagnostics → Interpretation**
+**Question → Controlled Comparison → Diagnostics → Interpretation**
 
-Version 0.4.0 asks whether bill length and bill depth provide complementary
-signal under the existing controlled comparison. It evaluates each feature
-alone and together on shared folds, audits split overlap and validation
-coverage, and runs a within-fold shuffled-training-label negative control.
+Version 0.5.0 adds probability-calibration evidence for logistic regression
+and the fixed KNN comparator. Uncalibrated and sigmoid-calibrated probabilities
+are evaluated on the same outer folds, while each calibrator is fitted only
+inside its outer training partition.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
@@ -50,6 +50,9 @@ This project keeps those decisions explicit:
 - Per-fold and summary ablation artifacts with paired differences
 - Train/validation overlap and validation-coverage diagnostics
 - Within-fold shuffled-training-label negative control
+- Cross-fitted uncalibrated and sigmoid-calibrated probabilities
+- Log loss, multiclass Brier score, and top-label calibration error
+- Reliability-bin CSV evidence and a calibration figure
 - Accuracy, balanced accuracy, macro F1, and per-class recall
 - Cross-validation mean, population standard deviation, minimum, and maximum
 - Row-level holdout predictions with source-row references
@@ -99,16 +102,18 @@ ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
                                          [--random-state INTEGER]
                                          [--test-size FRACTION]
                                          [--cv-folds INTEGER]
+                                         [--calibration-folds INTEGER]
 ```
 
-The documented v0.4 command is:
+The documented v0.5 command is:
 
 ```bash
 ml-evaluation-workbench evaluate data/penguins.csv \
   --output-dir results \
   --random-state 42 \
   --test-size 0.25 \
-  --cv-folds 5
+  --cv-folds 5 \
+  --calibration-folds 3
 ```
 
 Expected summary:
@@ -130,6 +135,10 @@ KNN CV macro F1 std: 0.018
 Logistic regression shuffled-label macro F1 mean: 0.254
 KNN shuffled-label macro F1 mean: 0.298
 Split integrity check: passed
+logistic_regression CV log loss, uncalibrated: 0.139
+logistic_regression CV log loss, sigmoid calibrated: 0.236
+knn CV log loss, uncalibrated: 0.280
+knn CV log loss, sigmoid calibrated: 0.133
 Metrics: results/metrics.json
 Predictions: results/predictions.csv
 Confusion matrix: results/confusion_matrix.png
@@ -141,6 +150,11 @@ Feature ablation summary: results/feature_ablation_summary.csv
 Feature ablation scores: results/feature_ablation_scores.png
 Leakage diagnostic folds: results/leakage_diagnostic_folds.csv
 Leakage diagnostics: results/leakage_diagnostics.json
+Probability calibration folds: results/probability_calibration_folds.csv
+Probability calibration summary: results/probability_calibration_summary.csv
+Probability calibration predictions: results/probability_calibration_predictions.csv
+Probability calibration bins: results/probability_calibration_bins.csv
+Probability calibration plot: results/probability_calibration.png
 ```
 
 ## Dataset
@@ -155,7 +169,7 @@ columns. The data are available under CC0 1.0.
 
 Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
 sex, body mass, flipper length, and observation year are intentionally excluded
-from v0.4. This keeps the question interpretable and avoids relying on
+from v0.5. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
@@ -180,7 +194,12 @@ easy.
     coverage across the folds.
 12. Shuffle only the training labels inside each fold, refit both substantive
     models, and compare the negative-control scores with observed scores.
-13. Save aggregate metrics, fold-level evidence, diagnostic summaries,
+13. Compare uncalibrated probabilities with sigmoid calibration on the same
+    outer folds. Fit each calibrator with three stratified folds drawn only
+    from the corresponding outer training partition.
+14. Record fold-level log loss, multiclass Brier score, top-label expected
+    calibration error, cross-fitted probabilities, and reliability bins.
+15. Save aggregate metrics, fold-level evidence, diagnostic summaries,
     predictions, and evaluation figures.
 
 The preprocessing steps are part of each scikit-learn `Pipeline`, so their
@@ -206,6 +225,8 @@ partition.
 - feature-ablation configuration, summaries, and paired differences from the
   two-feature reference
 - split-integrity checks and shuffled-training-label negative-control summaries
+- probability-calibration design, metric definitions, method summaries, and
+  paired fold-level differences
 
 `predictions.csv` contains:
 
@@ -232,9 +253,17 @@ for each substantive model and fold. `leakage_diagnostics.json` records split
 integrity, validation coverage, negative-control summaries, and the diagnostic
 interpretation boundary.
 
+`probability_calibration_folds.csv` records accuracy, log loss, multiclass
+Brier score, and top-label expected calibration error for each model, method,
+and outer fold. `probability_calibration_summary.csv` provides compact means
+and fold standard deviations. `probability_calibration_predictions.csv`
+contains one cross-fitted probability vector per source row, model, and
+method. `probability_calibration_bins.csv` records the ten equal-width
+top-label reliability bins used by `probability_calibration.png`.
+
 `confusion_matrix.png` visualizes the logistic-regression holdout errors.
 `cross_validation_scores.png` shows all three models' aggregate scores in
-each fold. `checksums.sha256` fixes the bytes of all eleven reference
+each fold. `checksums.sha256` fixes the bytes of all sixteen reference
 artifacts.
 
 ## Evaluation
@@ -300,12 +329,30 @@ The negative-control scores are substantially below the observed scores. This
 is consistent with the models using the intended feature-label association,
 but it does not prove that every possible source of leakage is absent.
 
+### Probability Calibration
+
+| Model and method | Accuracy | Log loss | Multiclass Brier | Top-label ECE |
+| --- | ---: | ---: | ---: | ---: |
+| Logistic, uncalibrated | 0.945 | 0.139 | 0.072 | 0.064 |
+| Logistic, sigmoid | 0.936 | 0.236 | 0.117 | 0.114 |
+| KNN, uncalibrated | 0.959 | 0.280 | 0.056 | 0.030 |
+| KNN, sigmoid | 0.965 | 0.133 | 0.057 | 0.071 |
+
+Sigmoid calibration reduces KNN mean log loss by 0.148 but slightly increases
+its Brier score and increases top-label ECE. For logistic regression, all
+three recorded probability-quality metrics worsen. The methods therefore
+produce a metric-dependent result rather than evidence that calibration is
+uniformly beneficial. The reliability points are descriptive summaries of
+the 344 cross-fitted predictions per model and method.
+
+![Top-label reliability diagram](results/probability_calibration.png)
+
 See [results/README.md](results/README.md) for interpretation and the boundary
 between this controlled result and a general performance claim.
 
 ## Limitations
 
-- Version 0.4.0 evaluates one small dataset with one deterministic holdout and
+- Version 0.5.0 evaluates one small dataset with one deterministic holdout and
   one five-fold stratified cross-validation run.
 - A random row split does not measure transfer across islands, years, field
   conditions, or independent collection programs.
@@ -325,6 +372,12 @@ between this controlled result and a general performance claim.
   alternative split seeds.
 - Split-integrity checks and a shuffled-label negative control can reveal some
   implementation failures but cannot prove the absence of all leakage.
+- Sigmoid is the only calibration method evaluated. Its three inner folds are
+  fixed in advance and are not compared with isotonic or other approaches.
+- Top-label ECE depends on ten fixed equal-width bins and can hide class-level
+  or within-bin calibration behavior. Empty bins provide no evidence.
+- Calibration estimates are based on a small dataset. Differences between
+  metrics and folds should not be treated as deployment guarantees.
 - The five fold scores are correlated because their training partitions
   overlap. Their standard deviation is descriptive and is not a confidence
   interval.
@@ -359,7 +412,12 @@ ml-evaluation-workbench/
 │   ├── leakage_diagnostics.json
 │   ├── metrics.json
 │   ├── model_comparison.csv
-│   └── predictions.csv
+│   ├── predictions.csv
+│   ├── probability_calibration.png
+│   ├── probability_calibration_bins.csv
+│   ├── probability_calibration_folds.csv
+│   ├── probability_calibration_predictions.csv
+│   └── probability_calibration_summary.csv
 ├── src/ml_evaluation_workbench/
 │   ├── __init__.py
 │   ├── __main__.py
@@ -380,8 +438,8 @@ ml-evaluation-workbench/
 
 - **v0.2:** Stratified cross-validation and fold-level evidence
 - **v0.3:** Controlled model comparison
-- **v0.4 (current):** Feature ablation and leakage diagnostics
-- **v0.5:** Probability calibration
+- **v0.4:** Feature ablation and leakage diagnostics
+- **v0.5 (current):** Probability calibration
 - **v0.6:** Missing-value and noise robustness
 - **v0.7:** Class-imbalance sensitivity
 - **v0.8:** Cross-experiment summaries and interface review
