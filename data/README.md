@@ -1,5 +1,14 @@
 # Dataset Provenance
 
+## 日本語概要
+
+このディレクトリには、公開Palmer Penguinsデータセットの固定コピーがあります。
+ML評価を同じ入力データから再現したい技術者向けに、upstream commit、取得元、
+license、SHA-256を記録しています。データの由来と検証手順の詳細は以下の英語本文を
+参照してください。
+
+---
+
 `penguins.csv` is the simplified Palmer Penguins dataset maintained by Allison
 Horst, Alison Hill, and Kristen Gorman. It contains measurements for 344
 penguins from three species observed in the Palmer Archipelago, Antarctica.
@@ -11,8 +20,8 @@ penguins from three species observed in the Palmer Archipelago, Antarctica.
 - SHA-256: `f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93`
 - Data license: [CC0 1.0 Universal](https://allisonhorst.github.io/palmerpenguins/LICENSE.html)
 
-The dataset is committed so the v0.4 evaluation can run without a network
-request. Regenerate it from the pinned source with:
+The dataset is committed so the evaluation can run without a network request.
+Regenerate it from the pinned source with:
 
 ```bash
 python examples/download_penguins.py

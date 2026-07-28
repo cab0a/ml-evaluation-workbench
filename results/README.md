@@ -1,11 +1,23 @@
-# Version 0.8 Evaluation Result
+# Version 0.9 Evaluation Result
+
+## 日本語概要
+
+このディレクトリには、固定したPalmer Penguinsデータに対するモデル比較、feature
+ablation、leakage diagnostics、probability calibration、robustness、
+class-imbalance sensitivityの評価結果があります。ML評価の設計、fold-level evidence、
+row-level predictions、再現可能な成果物を確認したい技術者向けです。
+
+v0.9.0では実験条件や数値結果を変更せず、27個の成果物を検証する公開`verify` CLI、
+checksum manifestの自動生成、Python 3.12参照環境を整備しました。評価方法、結果の
+解釈、再現手順、適用範囲の詳細は以下の英語本文を参照してください。
+
+---
 
 ## Question
 
-How can representative evidence from six controlled experiment families be
-summarized without hiding paired fold variation, mixing metric direction, or
-disconnecting the summary from its source artifacts? Which CLI, Python API,
-report, and artifact interfaces does this release expose?
+Can the committed evaluation be regenerated and independently verified through
+documented public commands, while separating broad runtime compatibility from
+the environment used for byte-exact reference reproduction?
 
 ## Controlled Setup
 
@@ -46,15 +58,23 @@ report, and artifact interfaces does this release expose?
   metrics
 - Interface review: generated CLI, Python API, metrics-schema, compatibility,
   and artifact inventory
+- Numerical scope: unchanged from v0.8; no model, split, metric, or experiment
+  condition is added or retuned
+- Artifact verification: `checksums.sha256` covers all 27 documented report
+  artifacts and is written automatically by `evaluate`
+- Reference environment: Ubuntu CI, Python 3.12, and
+  `requirements-reproducibility.txt`
+- Compatibility environment: Python 3.10 through 3.14 with declared dependency
+  ranges and self-consistent generated manifests
 - Random state: 42; label-shuffle seed is 42 plus the one-based fold number
 
 The majority-class dummy remains in the primary comparison but is excluded
 from feature ablation because it does not use input features.
 
 The v0.4 feature-ablation and leakage evidence, v0.5 calibration evidence,
-v0.6 perturbation evidence, and v0.7 class-imbalance evidence are retained in
-full. The v0.8 summary does not tune models, select conditions from reported
-effect sizes, or replace any experiment-specific artifact.
+v0.6 perturbation evidence, v0.7 class-imbalance evidence, and the v0.8 summary
+are retained in full. Version 0.9 does not tune models, select conditions from
+reported effect sizes, or change the numerical evaluation.
 
 ## Cross-Experiment Summary
 
@@ -262,22 +282,42 @@ interpretation rules.
 
 ## Interface Contract
 
-`interface_contract.json` is a machine-readable snapshot of the v0.8.0
+`interface_contract.json` is a machine-readable snapshot of the v0.9.0
 interfaces:
 
-- contract schema version 1 and pre-1.0 stability status
+- contract schema version 2 and pre-1.0 stability status
 - Python 3.10 through 3.14 compatibility
-- the `evaluate` CLI command, its arguments, defaults, and exit codes
-- package exports, `evaluate_dataset` parameters, and `EvaluationResult`
-  fields
+- the `evaluate` and `verify` CLI commands, their arguments, defaults, and exit
+  codes
+- package exports, public function parameters, and `EvaluationResult` fields
 - `metrics.json` report schema version 8 and its top-level keys
 - all 27 generated artifacts, media types, and roles
+- reference-environment and compatibility-matrix expectations
 
 The contract is generated during evaluation. Its artifact inventory and
 result fields use implementation-level definitions, while the documented CLI
 and Python surfaces are reviewed for this release. It supports review for
 accidental drift; it does not promise that every pre-1.0 interface will remain
 unchanged.
+
+## Reproducibility Review
+
+The review establishes four separate checks:
+
+1. `python examples/download_penguins.py --check` verifies the committed
+   dataset against its pinned SHA-256.
+2. `ml-evaluation-workbench evaluate ...` writes the complete report set and
+   atomically creates `checksums.sha256`.
+3. `ml-evaluation-workbench verify ARTIFACT_DIR` requires exactly the 27
+   documented report artifacts and checks every byte against that manifest.
+4. The Python 3.12 CI job installs
+   `requirements-reproducibility.txt`, regenerates `results/`, and requires an
+   empty Git diff.
+
+The Python 3.10 through 3.14 matrix has a different purpose: it installs the
+declared dependency ranges and requires successful tests, evaluation, and
+verification of each newly generated manifest. It does not claim that PNG
+bytes from every supported environment equal the Python 3.12 reference.
 
 ## Continuity Artifacts
 
@@ -292,19 +332,22 @@ regenerated under report schema version 8.
 
 ## Interpretation Boundary
 
-Version 0.8 adds a cross-experiment navigation layer and interface snapshot,
-not a statistical meta-analysis or deployment-performance guarantee. The
-class-imbalance, robustness, calibration, ablation, model, and negative-control
-comparisons reuse one five-fold outer partition and one public dataset
-revision. Their standard deviations describe observed fold variation and are
-not confidence intervals.
+Version 0.9 adds documentation and reproducibility controls, not another
+experiment, a statistical meta-analysis, or a deployment-performance
+guarantee. The class-imbalance, robustness, calibration, ablation, model, and
+negative-control comparisons reuse one five-fold outer partition and one
+public dataset revision. Their standard deviations describe observed fold
+variation and are not confidence intervals.
 
 The summary policy is fixed but selective. It uses the highest tested
 robustness severity and the lowest tested class-retention level, so it does
 not reproduce every condition. Preferred effects align favorable direction
 but are not standardized; their magnitudes cannot be compared across metrics.
 The interface contract is a reviewed pre-1.0 snapshot, not a 1.x
-compatibility guarantee.
+compatibility guarantee. The reference constraints are specific to Python
+3.12 and the documented Ubuntu CI environment. Other supported environments
+must produce a valid self-consistent report set, but exact image bytes can
+differ with rendering or dependency behavior.
 
 The reliability diagram uses top-label confidence rather than classwise
 calibration and depends on ten fixed bins. Empty or sparsely populated bins
@@ -338,6 +381,9 @@ prevalence forecast, or ecological conclusion.
 From the repository root:
 
 ```bash
+python -m pip install -c requirements-reproducibility.txt -e .
+python examples/download_penguins.py --check
 python examples/run_demo.py
-python examples/run_demo.py --verify-only
+ml-evaluation-workbench verify results
+git diff --exit-code -- results/
 ```

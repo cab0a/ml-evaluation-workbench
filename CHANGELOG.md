@@ -2,6 +2,29 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.9.0] - 2026-07-28
+
+### Added
+
+- Public `verify` CLI command and `verify_artifact_manifest` Python function
+  for checking the complete documented artifact set
+- Automatic, atomic `checksums.sha256` generation after every successful
+  evaluation
+- Python 3.12 reference constraints for byte-exact artifact regeneration
+- Tests for manifest writing, checksum failures, public verification, and
+  direct runtime dependency pins
+
+### Changed
+
+- Interface-contract schema updated to version 2 with both CLI commands,
+  verification API details, and explicit reference and compatibility scopes
+- Evaluation report schema retained at version 8 because numerical report
+  structure and experiment conditions are unchanged
+- CI now separates Python 3.10–3.14 compatibility checks from constrained
+  Python 3.12 byte-exact regeneration
+- Documentation reviewed against implementation, generated artifacts, CLI
+  behavior, CI policy, and pre-1.0 claim boundaries
+
 ## [0.8.0] - 2026-07-28
 
 ### Added
