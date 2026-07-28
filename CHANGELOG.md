@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.8.0] - 2026-07-28
+
+### Added
+
+- Fixed 25-row summary of representative paired contrasts across six existing
+  experiment families
+- Direction-aligned preferred effects that preserve the raw paired difference
+  while accounting for higher- and lower-is-better metrics
+- Macro-F1-only cross-experiment figure linked to the complete source
+  artifacts
+- Machine-readable interface contract for the CLI, Python API, report schema,
+  supported Python versions, and generated artifacts
+
+### Changed
+
+- Evaluation report schema updated to version 8
+- Reproduction manifest expanded to twenty-seven reference artifacts
+- Documentation reorganized around evidence navigation, interface review, and
+  cross-metric interpretation boundaries
+- Generated-artifact inventory centralized so the CLI, demo verification, and
+  interface contract share one source of truth
+
 ## [0.7.0] - 2026-07-28
 
 ### Added

@@ -1,6 +1,6 @@
 {
-  "report_version": 7,
-  "project_version": "0.7.0",
+  "report_version": 8,
+  "project_version": "0.8.0",
   "dataset": {
     "source": "data/penguins.csv",
     "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
@@ -1933,5 +1933,30 @@
       }
     },
     "interpretation": "controlled_training_prevalence_sensitivity_not_deployment_prevalence_or_cost_analysis"
+  },
+  "cross_experiment_summary": {
+    "schema_version": 1,
+    "row_count": 25,
+    "selection_policy": "fixed_representative_contrasts_not_selected_by_effect_size",
+    "difference_definition": "condition_minus_reference_on_the_same_outer_fold",
+    "preferred_effect_definition": "positive_favors_condition_after_metric_direction_alignment",
+    "metrics_are_not_cross_scale_comparable": true,
+    "experiments": [
+      "model_comparison",
+      "feature_ablation",
+      "shuffled_label_control",
+      "probability_calibration",
+      "validation_robustness",
+      "class_imbalance"
+    ],
+    "source_artifacts": [
+      "cross_validation_folds.csv",
+      "feature_ablation_folds.csv",
+      "leakage_diagnostic_folds.csv",
+      "probability_calibration_folds.csv",
+      "robustness_folds.csv",
+      "class_imbalance_folds.csv"
+    ],
+    "interpretation": "navigation_summary_not_a_replacement_for_source_artifacts"
   }
 }

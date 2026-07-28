@@ -1,8 +1,9 @@
-"""Regenerate or verify the committed v0.7 evaluation artifacts."""
+"""Regenerate or verify the committed v0.8 evaluation artifacts."""
 
 from __future__ import annotations
 
 import argparse
+import csv
 import hashlib
 import json
 import os
@@ -10,35 +11,11 @@ import sys
 from pathlib import Path
 
 from ml_evaluation_workbench.cli import main as workbench_main
+from ml_evaluation_workbench.interface import GENERATED_ARTIFACT_NAMES
 
 
 ROOT = Path(__file__).resolve().parents[1]
-ARTIFACT_NAMES = (
-    "class_imbalance.png",
-    "class_imbalance_diagnostics.json",
-    "class_imbalance_folds.csv",
-    "class_imbalance_summary.csv",
-    "confusion_matrix.png",
-    "cross_validation_folds.csv",
-    "cross_validation_scores.png",
-    "feature_ablation_folds.csv",
-    "feature_ablation_scores.png",
-    "feature_ablation_summary.csv",
-    "leakage_diagnostic_folds.csv",
-    "leakage_diagnostics.json",
-    "metrics.json",
-    "model_comparison.csv",
-    "predictions.csv",
-    "probability_calibration.png",
-    "probability_calibration_bins.csv",
-    "probability_calibration_folds.csv",
-    "probability_calibration_predictions.csv",
-    "probability_calibration_summary.csv",
-    "robustness.png",
-    "robustness_diagnostics.json",
-    "robustness_folds.csv",
-    "robustness_summary.csv",
-)
+ARTIFACT_NAMES = GENERATED_ARTIFACT_NAMES
 MANIFEST_NAME = "checksums.sha256"
 
 
@@ -287,6 +264,44 @@ def main() -> int:
                 "Quarter target-class retention did not reduce target recall "
                 f"for {model_name}"
             )
+    cross_experiment = metrics["cross_experiment_summary"]
+    if cross_experiment["schema_version"] != 1:
+        raise SystemExit("Unexpected cross-experiment schema version")
+    if cross_experiment["row_count"] != 25:
+        raise SystemExit(
+            "Cross-experiment row-count mismatch: expected 25, got "
+            f"{cross_experiment['row_count']}"
+        )
+    with (args.output_dir / "cross_experiment_summary.csv").open(
+        encoding="utf-8",
+        newline="",
+    ) as handle:
+        summary_rows = list(csv.DictReader(handle))
+    if len(summary_rows) != cross_experiment["row_count"]:
+        raise SystemExit(
+            "Cross-experiment CSV does not match its metadata row count"
+        )
+    if not all(row["folds"] == "5" for row in summary_rows):
+        raise SystemExit("Cross-experiment contrast has an unexpected fold count")
+    interface_contract = json.loads(
+        (args.output_dir / "interface_contract.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    if interface_contract["project_version"] != "0.8.0":
+        raise SystemExit("Unexpected interface-contract project version")
+    if interface_contract["reports"]["metrics_json"]["report_version"] != 8:
+        raise SystemExit("Unexpected interface-contract report version")
+    contracted_artifacts = {
+        artifact["path"]
+        for artifact in interface_contract["reports"][
+            "generated_artifacts"
+        ]
+    }
+    if contracted_artifacts != set(ARTIFACT_NAMES):
+        raise SystemExit(
+            "Interface-contract artifact list does not match the manifest"
+        )
     manifest = _write_manifest(args.output_dir)
     print(f"Checksums: {manifest}")
     return 0

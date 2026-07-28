@@ -543,3 +543,102 @@ def write_class_imbalance_scores(
     finally:
         plt.close(figure)
     return destination
+
+
+def write_cross_experiment_summary(
+    path: str | Path,
+    summary: pd.DataFrame,
+) -> Path:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    macro_rows = (
+        summary[summary["metric"] == "macro_f1"]
+        .iloc[::-1]
+        .reset_index(drop=True)
+    )
+    experiment_colors = {
+        "model_comparison": "#2563eb",
+        "feature_ablation": "#7c3aed",
+        "shuffled_label_control": "#dc2626",
+        "validation_robustness": "#d97706",
+        "class_imbalance": "#059669",
+    }
+    colors = [
+        experiment_colors[experiment]
+        for experiment in macro_rows["experiment"]
+    ]
+    positions = np.arange(len(macro_rows))
+    values = macro_rows["preferred_effect_mean"].to_numpy(dtype=float)
+    errors = macro_rows[
+        "condition_minus_reference_std"
+    ].to_numpy(dtype=float)
+    figure, axis = plt.subplots(figsize=(10.5, 8.0), dpi=120)
+    try:
+        axis.barh(
+            positions,
+            values,
+            xerr=errors,
+            color=colors,
+            alpha=0.88,
+            capsize=3,
+        )
+        axis.axvline(0.0, color="#111827", linewidth=1.0)
+        axis.set_yticks(positions)
+        axis.set_yticklabels(macro_rows["display_label"], fontsize=8)
+        axis.set_xlabel(
+            "Paired mean macro-F1 effect "
+            "(positive favors the condition)"
+        )
+        axis.set_title(
+            "Representative Cross-Experiment Macro-F1 Contrasts"
+        )
+        axis.grid(axis="x", alpha=0.25)
+        for position, value, error in zip(
+            positions,
+            values,
+            errors,
+            strict=True,
+        ):
+            offset = error + 0.015
+            text_position = (
+                value + offset if value >= 0 else value - offset
+            )
+            alignment = "left" if value >= 0 else "right"
+            axis.text(
+                text_position,
+                position,
+                f"{value:+.3f}",
+                va="center",
+                ha=alignment,
+                fontsize=7,
+            )
+        lower = float(np.min(values - errors))
+        upper = float(np.max(values + errors))
+        span = max(upper - lower, 0.2)
+        axis.set_xlim(
+            lower - span * 0.12,
+            upper + span * 0.12,
+        )
+        figure.tight_layout()
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".png",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        figure.savefig(
+            temporary,
+            format="png",
+            metadata={"Software": "ml-evaluation-workbench"},
+        )
+        os.replace(temporary, destination)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+    finally:
+        plt.close(figure)
+    return destination

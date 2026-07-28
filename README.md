@@ -7,11 +7,11 @@ regression、5-nearest neighborsを比較するML評価プロジェクトです�
 設計や結果の監査方法を確認したいMLエンジニアに役立ちます。
 
 fold-level metrics、row-level predictions、feature ablation、split integrity、
-shuffled-label negative controlに加え、probability calibration、validation-onlyの
-missing-value injectionとGaussian feature noise、training-class
-downsamplingによる感度評価を含みます。前処理は各training partition内でfitされ、
-24個の成果物はSHA-256で検証できます。結果の適用範囲と制約の詳細は英語本文を参照して
-ください。
+shuffled-label negative control、probability calibration、validation robustness、
+class-imbalance sensitivityを含みます。v0.8.0では6種類の実験から固定方針で選んだ
+25件の代表比較と、CLI・Python API・成果物を記録するinterface contractを追加しました。
+前処理は各training partition内でfitされ、27個の成果物はSHA-256で検証できます。
+結果の適用範囲と制約の詳細は英語本文を参照してください。
 
 ---
 
@@ -26,10 +26,11 @@ ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
 
 **Question → Controlled Comparison → Diagnostics → Interpretation**
 
-Version 0.7.0 adds a controlled class-imbalance experiment. Rows from the
-globally least frequent class are retained at four fixed levels inside each
-outer training fold, while validation data, folds, features, model settings,
-and preprocessing policy remain fixed.
+Version 0.8.0 adds a fixed cross-experiment summary over six existing
+experiment families and a machine-readable interface contract. The summary
+preserves paired outer-fold differences and metric direction, while the
+contract records the installed CLI, Python API, report schema, compatibility,
+and generated artifacts.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
@@ -42,18 +43,20 @@ ablation, negative controls, and row-level errors.
 
 ## Representative Result
 
-Reducing retained Chinstrap training rows from 100% to 25% lowers their mean
-training share from 19.8% to 6.0%. Mean Chinstrap recall falls from 0.822 to
-0.619 for logistic regression and from 0.896 to 0.737 for KNN.
+The v0.8 summary contains 25 representative paired contrasts selected by a
+fixed policy from model comparison, feature ablation, shuffled-label control,
+probability calibration, validation robustness, and class-imbalance
+sensitivity. It provides one navigation layer without discarding the complete
+source artifacts.
 
-![Class-imbalance sensitivity](results/class_imbalance.png)
+![Representative cross-experiment macro-F1 contrasts](results/cross_experiment_summary.png)
 
-The per-fold samples, class counts, scores, and paired differences are
-available in
-[`class_imbalance_folds.csv`](results/class_imbalance_folds.csv) and
-[`class_imbalance_summary.csv`](results/class_imbalance_summary.csv). The
-result demonstrates sensitivity to one controlled training-prevalence change,
-not expected performance under a real deployment population.
+Positive `preferred_effect_mean` values favor the condition after accounting
+for whether a metric is higher- or lower-is-better. The figure intentionally
+shows only the 15 macro-F1 contrasts; all 25 contrasts, including probability
+metrics and target-class recall, are available in
+[`cross_experiment_summary.csv`](results/cross_experiment_summary.csv).
+Effects from different metric scales must not be compared by magnitude.
 
 ## Problem
 
@@ -95,6 +98,9 @@ This project keeps those decisions explicit:
 - Deterministic downsampling of the least frequent training class
 - Shared class-retention samples at 100%, 75%, 50%, and 25%
 - Target-class recall, class-count evidence, and paired sensitivity summaries
+- Fixed representative contrasts across six experiment families
+- Direction-aligned effect values with preserved paired fold variation
+- Machine-readable CLI, Python API, report, and artifact interface contract
 - Accuracy, balanced accuracy, macro F1, and per-class recall
 - Cross-validation mean, population standard deviation, minimum, and maximum
 - Row-level holdout predictions with source-row references
@@ -127,11 +133,12 @@ ml-evaluation-workbench evaluate data/penguins.csv \
   --output-dir output/quickstart
 ```
 
-The evaluation writes twenty-four artifacts under `output/quickstart/`.
-Start with `model_comparison.csv` for a compact model-level view,
-`class_imbalance.png` for the representative sensitivity result, and
-`predictions.csv` for row-level error inspection. Checksum-fixed reference
-copies are committed under `results/`.
+The evaluation writes twenty-seven artifacts under `output/quickstart/`.
+Start with `cross_experiment_summary.csv` and
+`cross_experiment_summary.png` for a compact evidence map, then use
+`interface_contract.json` to inspect the documented interfaces. Complete
+fold-level and row-level evidence remains available in the experiment-specific
+artifacts. Checksum-fixed reference copies are committed under `results/`.
 
 ## Usage
 
@@ -143,7 +150,7 @@ ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
                                          [--calibration-folds INTEGER]
 ```
 
-The documented v0.7 command is:
+The documented v0.8 command is:
 
 ```bash
 ml-evaluation-workbench evaluate data/penguins.csv \
@@ -185,6 +192,7 @@ knn macro F1 at 50% injected missingness: 0.625
 knn macro F1 at 1.0x feature noise: 0.673
 knn macro F1 at 25% Chinstrap retention: 0.922
 knn Chinstrap recall at 25% retention: 0.737
+Cross-experiment contrasts: 25
 Metrics: results/metrics.json
 Predictions: results/predictions.csv
 Confusion matrix: results/confusion_matrix.png
@@ -209,6 +217,9 @@ Class-imbalance folds: results/class_imbalance_folds.csv
 Class-imbalance summary: results/class_imbalance_summary.csv
 Class-imbalance diagnostics: results/class_imbalance_diagnostics.json
 Class-imbalance plot: results/class_imbalance.png
+Cross-experiment summary: results/cross_experiment_summary.csv
+Cross-experiment plot: results/cross_experiment_summary.png
+Interface contract: results/interface_contract.json
 ```
 
 ## Technical Design
@@ -225,7 +236,7 @@ columns. The data are available under CC0 1.0.
 
 Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
 sex, body mass, flipper length, and observation year are intentionally excluded
-from v0.7. This keeps the question interpretable and avoids relying on
+from v0.8. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
@@ -266,7 +277,13 @@ easy.
 19. Keep every validation partition unchanged, and record retained source-row
     hashes, class counts, target-class recall, and paired differences from full
     retention.
-20. Save aggregate metrics, fold-level evidence, diagnostic summaries,
+20. Select a fixed representative set of comparisons from the six experiment
+    families. Preserve same-fold differences and align their signs so a
+    positive preferred effect always favors the condition.
+21. Record the installed CLI, Python API, report schema, supported Python
+    versions, and generated-artifact inventory in a machine-readable interface
+    contract.
+22. Save aggregate metrics, fold-level evidence, diagnostic summaries,
     predictions, and evaluation figures.
 
 The preprocessing steps are part of each scikit-learn `Pipeline`, so their
@@ -298,6 +315,8 @@ partition.
   condition summaries, and paired differences from unperturbed scores
 - class-imbalance target selection, retention levels, sampling policy,
   condition summaries, and paired differences from full retention
+- cross-experiment selection policy, metric-direction rules, source artifacts,
+  and the number and scope of representative contrasts
 
 `predictions.csv` contains:
 
@@ -347,12 +366,50 @@ differences from full retention. `class_imbalance_diagnostics.json` fixes the
 target-class selection and sampling rules. `class_imbalance.png` visualizes
 macro F1 and Chinstrap-recall sensitivity.
 
+`cross_experiment_summary.csv` contains 25 fixed representative contrasts
+across six experiment families. Every row records its reference and condition,
+metric direction, fold means and population standard deviations, paired
+condition-minus-reference differences, direction-aligned preferred effect,
+source artifact, and interpretation. `cross_experiment_summary.png` visualizes
+the 15 macro-F1 contrasts only, avoiding magnitude comparisons across
+incompatible metric scales.
+
+`interface_contract.json` records interface-contract schema version 1, the
+project and report versions, Python compatibility, CLI syntax and exit codes,
+package exports, the `evaluate_dataset` signature, `EvaluationResult` fields,
+top-level metrics keys, and all generated artifacts.
+
 `confusion_matrix.png` visualizes the logistic-regression holdout errors.
 `cross_validation_scores.png` shows all three models' aggregate scores in
-each fold. `checksums.sha256` fixes the bytes of all twenty-four reference
+each fold. `checksums.sha256` fixes the bytes of all twenty-seven reference
 artifacts.
 
 ## Results
+
+### Cross-Experiment Summary
+
+The fixed v0.8 policy selects 25 contrasts from six existing experiment
+families. Selection is based on experiment role and tested severity, not on
+effect size. Representative rows include:
+
+| Experiment | Condition vs Reference | Metric | Preferred Effect |
+| --- | --- | --- | ---: |
+| Model comparison | KNN vs majority dummy | Macro F1 | +0.745 |
+| Feature ablation | Bill depth only vs both, logistic | Macro F1 | -0.359 |
+| Negative control | Shuffled vs observed, logistic | Macro F1 | -0.674 |
+| Calibration | Sigmoid vs uncalibrated, KNN | Log loss | +0.148 |
+| Validation robustness | 50% missing vs unperturbed, KNN | Macro F1 | -0.324 |
+| Class imbalance | 25% vs 100% Chinstrap, logistic | Chinstrap recall | -0.203 |
+
+For lower-is-better metrics such as log loss, `preferred_effect_mean` reverses
+the raw condition-minus-reference sign. This makes direction consistent
+within the navigation table, but it does not put accuracy, loss, calibration,
+recall, and macro F1 on a common scale. Each row links back to its complete
+source artifact.
+
+![Representative cross-experiment macro-F1 contrasts](results/cross_experiment_summary.png)
+
+### Holdout Comparison
 
 | Model | Accuracy | Balanced Accuracy | Macro F1 |
 | --- | ---: | ---: | ---: |
@@ -477,7 +534,7 @@ between this controlled result and a general performance claim.
 
 ## Limitations
 
-- Version 0.7.0 evaluates one small dataset with one deterministic holdout and
+- Version 0.8.0 evaluates one small dataset with one deterministic holdout and
   one five-fold stratified cross-validation run.
 - A random row split does not measure transfer across islands, years, field
   conditions, or independent collection programs.
@@ -508,7 +565,7 @@ between this controlled result and a general performance claim.
 - Gaussian perturbations are independent, zero mean, and scaled from training
   folds. They do not model bias, outliers, correlated sensor noise, or drift.
 - Structured missingness, label noise, combined perturbations, and changes to
-  non-target training classes are outside the v0.7 scope.
+  non-target training classes are outside the v0.8 scope.
 - The class-imbalance experiment downsamples only Chinstrap, selected because
   it is globally least frequent in this dataset. It does not evaluate other
   target classes, oversampling, class weighting, threshold changes, or
@@ -518,6 +575,14 @@ between this controlled result and a general performance claim.
   shift in validation data.
 - Class-retention samples use one deterministic seed per fold and condition.
   Alternative retained rows can produce different sensitivity curves.
+- The cross-experiment summary is a selective navigation artifact, not a
+  statistical meta-analysis. Its fixed policy omits intermediate robustness
+  and class-retention severities.
+- Direction alignment makes favorable signs consistent, but preferred effects
+  from different metrics are not standardized or comparable by magnitude.
+- The interface contract documents v0.8.0 behavior. It is not a 1.x
+  compatibility promise, and additive or explicitly versioned changes can
+  still occur before v1.0.
 - The five fold scores are correlated because their training partitions
   overlap. Their standard deviation is descriptive and is not a confidence
   interval.
@@ -527,6 +592,26 @@ between this controlled result and a general performance claim.
   measurement error are not modeled.
 - The result is not intended for field identification, ecological inference,
   or decisions affecting wildlife.
+
+## Interface Contract
+
+Version 0.8.0 reviews and records the surfaces a downstream reviewer can
+depend on for this release:
+
+- CLI: `ml-evaluation-workbench evaluate DATASET` with the five documented
+  options above
+- Exit code `0` for success and `2` for argument, input, or output errors
+- Python package exports including `evaluate_dataset` and `EvaluationResult`
+- `metrics.json` report schema version 8 and its top-level sections
+- Twenty-seven generated artifacts and their roles
+- Python 3.10 through 3.14 compatibility exercised in CI
+
+[`interface_contract.json`](results/interface_contract.json) is generated with
+each evaluation. Its artifact inventory and `EvaluationResult` fields come
+from implementation-level definitions, while the documented CLI and Python
+surfaces are explicitly reviewed for this release. The project remains
+pre-1.0: these interfaces are versioned and documented, but the contract
+allows additive or versioned changes before the stable release.
 
 ## Reproducibility
 
@@ -559,7 +644,8 @@ python -m pytest
 
 Tests cover dataset validation, holdout and cross-validation behavior,
 feature-ablation accounting, leakage diagnostics, robustness and
-class-imbalance protocols, report schemas, CLI arguments and errors,
+class-imbalance protocols, cross-experiment selection and metric direction,
+interface-contract contents, report schemas, CLI arguments and errors,
 deterministic outputs, and checksum verification.
 GitHub Actions checks the installed CLI and dataset, runs the tests and a
 controlled evaluation on Python 3.10 through 3.14, and independently requires
@@ -567,7 +653,7 @@ a Python 3.12 regeneration to match committed `results/`.
 
 ## Compatibility
 
-Python 3.10 through 3.14 are exercised in CI. Version 0.7.0 is an alpha
+Python 3.10 through 3.14 are exercised in CI. Version 0.8.0 is an alpha
 evaluation project, so consumers should treat the documented command,
 `metrics.json` report version, and CSV columns as versioned interfaces rather
 than as a 1.x stability guarantee. Release changes are recorded in
@@ -592,11 +678,14 @@ ml-evaluation-workbench/
 │   ├── class_imbalance_folds.csv
 │   ├── class_imbalance_summary.csv
 │   ├── confusion_matrix.png
+│   ├── cross_experiment_summary.csv
+│   ├── cross_experiment_summary.png
 │   ├── cross_validation_folds.csv
 │   ├── cross_validation_scores.png
 │   ├── feature_ablation_folds.csv
 │   ├── feature_ablation_scores.png
 │   ├── feature_ablation_summary.csv
+│   ├── interface_contract.json
 │   ├── leakage_diagnostic_folds.csv
 │   ├── leakage_diagnostics.json
 │   ├── metrics.json
@@ -617,6 +706,7 @@ ml-evaluation-workbench/
 │   ├── cli.py
 │   ├── dataset.py
 │   ├── evaluation.py
+│   ├── interface.py
 │   └── reporting.py
 ├── tests/
 ├── .gitignore
@@ -634,8 +724,8 @@ ml-evaluation-workbench/
 - **v0.4:** Feature ablation and leakage diagnostics
 - **v0.5:** Probability calibration
 - **v0.6:** Missing-value and noise robustness
-- **v0.7 (current):** Class-imbalance sensitivity
-- **v0.8:** Cross-experiment summaries and interface review
+- **v0.7:** Class-imbalance sensitivity
+- **v0.8 (current):** Cross-experiment summaries and interface review
 - **v0.9:** Documentation and reproducibility review
 - **v1.0:** Stable portfolio release
 

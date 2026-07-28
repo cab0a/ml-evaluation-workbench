@@ -63,6 +63,7 @@ MISSING_RATES = (0.0, 0.1, 0.25, 0.5)
 NOISE_STD_MULTIPLIERS = (0.0, 0.25, 0.5, 1.0)
 ROBUSTNESS_PERTURBATIONS = ("missing_values", "gaussian_noise")
 CLASS_RETENTION_FRACTIONS = (1.0, 0.75, 0.5, 0.25)
+CROSS_EXPERIMENT_SCHEMA_VERSION = 1
 
 
 @dataclass(slots=True)
@@ -85,6 +86,7 @@ class EvaluationResult:
     class_imbalance_folds: pd.DataFrame
     class_imbalance_summary: pd.DataFrame
     class_imbalance_diagnostics: dict[str, Any]
+    cross_experiment_summary: pd.DataFrame
     confusion: np.ndarray
     labels: tuple[str, ...]
 
@@ -1376,6 +1378,319 @@ def _class_imbalance_evaluation(
     return fold_scores, pd.DataFrame(summary_rows), diagnostics
 
 
+def _contrast_row(
+    *,
+    experiment: str,
+    comparison: str,
+    display_label: str,
+    model: str,
+    metric: str,
+    preferred_direction: str,
+    reference: str,
+    condition: str,
+    reference_values: pd.Series,
+    condition_values: pd.Series,
+    source_artifact: str,
+    interpretation: str,
+) -> dict[str, Any]:
+    reference_values = reference_values.sort_index()
+    condition_values = condition_values.sort_index()
+    if not reference_values.index.equals(condition_values.index):
+        raise RuntimeError(
+            f"Unaligned fold indices for cross-experiment contrast {comparison}"
+        )
+    reference_summary = _score_summary(reference_values)
+    condition_summary = _score_summary(condition_values)
+    difference_summary = _score_summary(
+        condition_values - reference_values
+    )
+    if preferred_direction == "higher":
+        preferred_effect_mean = difference_summary["mean"]
+    elif preferred_direction == "lower":
+        preferred_effect_mean = -difference_summary["mean"]
+    else:
+        raise ValueError(
+            "preferred_direction must be either higher or lower"
+        )
+    return {
+        "experiment": experiment,
+        "comparison": comparison,
+        "display_label": display_label,
+        "model": model,
+        "metric": metric,
+        "preferred_direction": preferred_direction,
+        "reference": reference,
+        "condition": condition,
+        "reference_mean": reference_summary["mean"],
+        "reference_std": reference_summary["std"],
+        "condition_mean": condition_summary["mean"],
+        "condition_std": condition_summary["std"],
+        "condition_minus_reference_mean": difference_summary["mean"],
+        "condition_minus_reference_std": difference_summary["std"],
+        "preferred_effect_mean": round(preferred_effect_mean, 6),
+        "folds": len(reference_values),
+        "source_artifact": source_artifact,
+        "interpretation": interpretation,
+    }
+
+
+def _cross_experiment_summary(
+    *,
+    cross_validation_folds: pd.DataFrame,
+    feature_ablation_folds: pd.DataFrame,
+    leakage_diagnostic_folds: pd.DataFrame,
+    probability_calibration_folds: pd.DataFrame,
+    robustness_folds: pd.DataFrame,
+    class_imbalance_folds: pd.DataFrame,
+    target_class: str,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    model_labels = {
+        "dummy": "Dummy",
+        "logistic_regression": "Logistic",
+        "knn": "KNN",
+    }
+
+    for condition_model, reference_model in COMPARISON_PAIRS:
+        reference_rows = cross_validation_folds[
+            cross_validation_folds["model"] == reference_model
+        ].set_index("fold")
+        condition_rows = cross_validation_folds[
+            cross_validation_folds["model"] == condition_model
+        ].set_index("fold")
+        rows.append(
+            _contrast_row(
+                experiment="model_comparison",
+                comparison=(
+                    f"{condition_model}_vs_{reference_model}"
+                ),
+                display_label=(
+                    f"{model_labels[condition_model]} vs "
+                    f"{model_labels[reference_model]}"
+                ),
+                model=condition_model,
+                metric="macro_f1",
+                preferred_direction="higher",
+                reference=reference_model,
+                condition=condition_model,
+                reference_values=reference_rows["macro_f1"],
+                condition_values=condition_rows["macro_f1"],
+                source_artifact="cross_validation_folds.csv",
+                interpretation="shared_fold_model_difference",
+            )
+        )
+
+    feature_labels = {
+        "bill_length_only": "Bill length only",
+        "bill_depth_only": "Bill depth only",
+    }
+    for feature_set in ("bill_length_only", "bill_depth_only"):
+        for model_name in DIAGNOSTIC_MODEL_NAMES:
+            reference_rows = feature_ablation_folds[
+                (
+                    feature_ablation_folds["feature_set"]
+                    == REFERENCE_FEATURE_SET
+                )
+                & (feature_ablation_folds["model"] == model_name)
+            ].set_index("fold")
+            condition_rows = feature_ablation_folds[
+                (feature_ablation_folds["feature_set"] == feature_set)
+                & (feature_ablation_folds["model"] == model_name)
+            ].set_index("fold")
+            rows.append(
+                _contrast_row(
+                    experiment="feature_ablation",
+                    comparison=(
+                        f"{feature_set}_vs_{REFERENCE_FEATURE_SET}"
+                    ),
+                    display_label=(
+                        f"{feature_labels[feature_set]} "
+                        f"({model_labels[model_name]})"
+                    ),
+                    model=model_name,
+                    metric="macro_f1",
+                    preferred_direction="higher",
+                    reference=REFERENCE_FEATURE_SET,
+                    condition=feature_set,
+                    reference_values=reference_rows["macro_f1"],
+                    condition_values=condition_rows["macro_f1"],
+                    source_artifact="feature_ablation_folds.csv",
+                    interpretation=(
+                        "diagnostic_feature_set_difference_not_causal"
+                    ),
+                )
+            )
+
+    for model_name in DIAGNOSTIC_MODEL_NAMES:
+        model_rows = leakage_diagnostic_folds[
+            leakage_diagnostic_folds["model"] == model_name
+        ].set_index("fold")
+        rows.append(
+            _contrast_row(
+                experiment="shuffled_label_control",
+                comparison="shuffled_labels_vs_observed_labels",
+                display_label=(
+                    f"Shuffled labels ({model_labels[model_name]})"
+                ),
+                model=model_name,
+                metric="macro_f1",
+                preferred_direction="higher",
+                reference="observed_labels",
+                condition="shuffled_training_labels",
+                reference_values=model_rows["observed_macro_f1"],
+                condition_values=model_rows["shuffled_macro_f1"],
+                source_artifact="leakage_diagnostic_folds.csv",
+                interpretation="negative_control_not_model_candidate",
+            )
+        )
+
+    for model_name in DIAGNOSTIC_MODEL_NAMES:
+        calibration_rows = probability_calibration_folds[
+            probability_calibration_folds["model"] == model_name
+        ]
+        reference_rows = calibration_rows[
+            calibration_rows["calibration"] == "uncalibrated"
+        ].set_index("fold")
+        condition_rows = calibration_rows[
+            calibration_rows["calibration"] == "sigmoid"
+        ].set_index("fold")
+        for metric in PROBABILITY_SCORE_NAMES:
+            preferred_direction = (
+                "higher" if metric == "accuracy" else "lower"
+            )
+            display_metric = metric.replace("_", " ")
+            rows.append(
+                _contrast_row(
+                    experiment="probability_calibration",
+                    comparison="sigmoid_vs_uncalibrated",
+                    display_label=(
+                        f"Sigmoid {display_metric} "
+                        f"({model_labels[model_name]})"
+                    ),
+                    model=model_name,
+                    metric=metric,
+                    preferred_direction=preferred_direction,
+                    reference="uncalibrated",
+                    condition="sigmoid",
+                    reference_values=reference_rows[metric],
+                    condition_values=condition_rows[metric],
+                    source_artifact="probability_calibration_folds.csv",
+                    interpretation=(
+                        "metric_specific_calibration_difference"
+                    ),
+                )
+            )
+
+    robustness_conditions = (
+        ("missing_values", 0.5, "50% missing values"),
+        ("gaussian_noise", 1.0, "1.0x Gaussian noise"),
+    )
+    for perturbation, severity, display_condition in robustness_conditions:
+        for model_name in DIAGNOSTIC_MODEL_NAMES:
+            reference_rows = robustness_folds[
+                (robustness_folds["perturbation"] == perturbation)
+                & (robustness_folds["severity"] == 0.0)
+                & (robustness_folds["model"] == model_name)
+            ].set_index("fold")
+            condition_rows = robustness_folds[
+                (robustness_folds["perturbation"] == perturbation)
+                & (robustness_folds["severity"] == severity)
+                & (robustness_folds["model"] == model_name)
+            ].set_index("fold")
+            rows.append(
+                _contrast_row(
+                    experiment="validation_robustness",
+                    comparison=(
+                        f"{perturbation}_{severity:g}_vs_0"
+                    ),
+                    display_label=(
+                        f"{display_condition} "
+                        f"({model_labels[model_name]})"
+                    ),
+                    model=model_name,
+                    metric="macro_f1",
+                    preferred_direction="higher",
+                    reference=f"{perturbation}:0",
+                    condition=f"{perturbation}:{severity:g}",
+                    reference_values=reference_rows["macro_f1"],
+                    condition_values=condition_rows["macro_f1"],
+                    source_artifact="robustness_folds.csv",
+                    interpretation=(
+                        "synthetic_validation_sensitivity"
+                        "_not_deployment_robustness"
+                    ),
+                )
+            )
+
+    target_recall_column = f"recall_{target_class.lower()}"
+    for model_name in DIAGNOSTIC_MODEL_NAMES:
+        reference_rows = class_imbalance_folds[
+            (class_imbalance_folds["retention_fraction"] == 1.0)
+            & (class_imbalance_folds["model"] == model_name)
+        ].set_index("fold")
+        condition_rows = class_imbalance_folds[
+            (class_imbalance_folds["retention_fraction"] == 0.25)
+            & (class_imbalance_folds["model"] == model_name)
+        ].set_index("fold")
+        for metric, column_name, display_label in (
+            (
+                "macro_f1",
+                "macro_f1",
+                f"25% {target_class} retention",
+            ),
+            (
+                "target_class_recall",
+                target_recall_column,
+                f"{target_class} recall at 25% retention",
+            ),
+        ):
+            rows.append(
+                _contrast_row(
+                    experiment="class_imbalance",
+                    comparison="target_retention_0.25_vs_1",
+                    display_label=(
+                        f"{display_label} ({model_labels[model_name]})"
+                    ),
+                    model=model_name,
+                    metric=metric,
+                    preferred_direction="higher",
+                    reference=f"{target_class}_retention:1",
+                    condition=f"{target_class}_retention:0.25",
+                    reference_values=reference_rows[column_name],
+                    condition_values=condition_rows[column_name],
+                    source_artifact="class_imbalance_folds.csv",
+                    interpretation=(
+                        "controlled_training_prevalence_sensitivity"
+                        "_not_deployment_prevalence"
+                    ),
+                )
+            )
+
+    summary = pd.DataFrame(rows)
+    metadata = {
+        "schema_version": CROSS_EXPERIMENT_SCHEMA_VERSION,
+        "row_count": len(summary),
+        "selection_policy": (
+            "fixed_representative_contrasts_not_selected_by_effect_size"
+        ),
+        "difference_definition": (
+            "condition_minus_reference_on_the_same_outer_fold"
+        ),
+        "preferred_effect_definition": (
+            "positive_favors_condition_after_metric_direction_alignment"
+        ),
+        "metrics_are_not_cross_scale_comparable": True,
+        "experiments": list(dict.fromkeys(summary["experiment"])),
+        "source_artifacts": list(
+            dict.fromkeys(summary["source_artifact"])
+        ),
+        "interpretation": (
+            "navigation_summary_not_a_replacement_for_source_artifacts"
+        ),
+    }
+    return summary, metadata
+
+
 def evaluate_dataset(
     frame: pd.DataFrame,
     *,
@@ -1476,6 +1791,18 @@ def evaluate_dataset(
         random_state=random_state,
         splits=splits,
     )
+    (
+        cross_experiment_summary,
+        cross_experiment_metadata,
+    ) = _cross_experiment_summary(
+        cross_validation_folds=cross_validation_folds,
+        feature_ablation_folds=feature_ablation_folds,
+        leakage_diagnostic_folds=leakage_diagnostic_folds,
+        probability_calibration_folds=probability_calibration_folds,
+        robustness_folds=robustness_folds,
+        class_imbalance_folds=class_imbalance_folds,
+        target_class=class_imbalance_diagnostics["target_class"],
+    )
     indices = np.arange(len(frame))
     train_indices, test_indices = train_test_split(
         indices,
@@ -1539,7 +1866,7 @@ def evaluate_dataset(
         cross_validation_summary,
     )
     metrics = {
-        "report_version": 7,
+        "report_version": 8,
         "dataset": {
             "rows": len(frame),
             "target": TARGET,
@@ -1567,6 +1894,7 @@ def evaluate_dataset(
         "probability_calibration": probability_calibration_metrics,
         "robustness": robustness_diagnostics,
         "class_imbalance": class_imbalance_diagnostics,
+        "cross_experiment_summary": cross_experiment_metadata,
     }
     return EvaluationResult(
         metrics=metrics,
@@ -1587,6 +1915,7 @@ def evaluate_dataset(
         class_imbalance_folds=class_imbalance_folds,
         class_imbalance_summary=class_imbalance_summary,
         class_imbalance_diagnostics=class_imbalance_diagnostics,
+        cross_experiment_summary=cross_experiment_summary,
         confusion=logistic_confusion,
         labels=labels,
     )

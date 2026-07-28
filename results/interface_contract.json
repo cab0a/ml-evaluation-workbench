@@ -1,0 +1,287 @@
+{
+  "contract_version": 1,
+  "project_version": "0.8.0",
+  "stability": {
+    "status": "pre_1_0",
+    "policy": "documented_interfaces_are_versioned_additive_changes_remain_possible_before_1_0"
+  },
+  "compatibility": {
+    "python": [
+      "3.10",
+      "3.11",
+      "3.12",
+      "3.13",
+      "3.14"
+    ]
+  },
+  "cli": {
+    "program": "ml-evaluation-workbench",
+    "command": "evaluate",
+    "positional_arguments": [
+      {
+        "name": "dataset",
+        "type": "path",
+        "description": "Palmer Penguins CSV path"
+      }
+    ],
+    "options": [
+      {
+        "name": "--output-dir",
+        "type": "path",
+        "default": "results"
+      },
+      {
+        "name": "--random-state",
+        "type": "integer",
+        "default": 42
+      },
+      {
+        "name": "--test-size",
+        "type": "float",
+        "default": 0.25
+      },
+      {
+        "name": "--cv-folds",
+        "type": "integer",
+        "default": 5
+      },
+      {
+        "name": "--calibration-folds",
+        "type": "integer",
+        "default": 3
+      }
+    ],
+    "exit_codes": {
+      "0": "success",
+      "2": "argument_input_or_io_error"
+    }
+  },
+  "python_api": {
+    "package_exports": [
+      "DATASET_SHA256",
+      "DATASET_URL",
+      "EvaluationResult",
+      "__version__",
+      "download_dataset",
+      "evaluate_dataset",
+      "load_dataset",
+      "sha256_file",
+      "verify_dataset"
+    ],
+    "evaluate_dataset": {
+      "parameters": [
+        {
+          "name": "frame",
+          "type": "pandas.DataFrame",
+          "required": true
+        },
+        {
+          "name": "random_state",
+          "type": "integer",
+          "default": 42
+        },
+        {
+          "name": "test_size",
+          "type": "float",
+          "default": 0.25
+        },
+        {
+          "name": "cv_folds",
+          "type": "integer",
+          "default": 5
+        },
+        {
+          "name": "calibration_folds",
+          "type": "integer",
+          "default": 3
+        }
+      ],
+      "returns": "EvaluationResult"
+    },
+    "evaluation_result_fields": [
+      "metrics",
+      "predictions",
+      "cross_validation_folds",
+      "model_comparison",
+      "feature_ablation_folds",
+      "feature_ablation_summary",
+      "leakage_diagnostic_folds",
+      "leakage_diagnostics",
+      "probability_calibration_folds",
+      "probability_calibration_summary",
+      "probability_calibration_predictions",
+      "probability_calibration_bins",
+      "robustness_folds",
+      "robustness_summary",
+      "robustness_diagnostics",
+      "class_imbalance_folds",
+      "class_imbalance_summary",
+      "class_imbalance_diagnostics",
+      "cross_experiment_summary",
+      "confusion",
+      "labels"
+    ]
+  },
+  "reports": {
+    "metrics_json": {
+      "report_version": 8,
+      "top_level_keys": [
+        "report_version",
+        "project_version",
+        "dataset",
+        "split",
+        "models",
+        "comparison",
+        "cross_validation",
+        "feature_ablation",
+        "leakage_diagnostics",
+        "probability_calibration",
+        "robustness",
+        "class_imbalance",
+        "cross_experiment_summary"
+      ]
+    },
+    "generated_artifacts": [
+      {
+        "path": "class_imbalance.png",
+        "media_type": "image/png",
+        "role": "class_imbalance_figure"
+      },
+      {
+        "path": "class_imbalance_diagnostics.json",
+        "media_type": "application/json",
+        "role": "class_imbalance_protocol"
+      },
+      {
+        "path": "class_imbalance_folds.csv",
+        "media_type": "text/csv",
+        "role": "class_imbalance_fold_evidence"
+      },
+      {
+        "path": "class_imbalance_summary.csv",
+        "media_type": "text/csv",
+        "role": "class_imbalance_summary"
+      },
+      {
+        "path": "confusion_matrix.png",
+        "media_type": "image/png",
+        "role": "holdout_confusion_matrix"
+      },
+      {
+        "path": "cross_experiment_summary.csv",
+        "media_type": "text/csv",
+        "role": "representative_contrast_summary"
+      },
+      {
+        "path": "cross_experiment_summary.png",
+        "media_type": "image/png",
+        "role": "macro_f1_contrast_figure"
+      },
+      {
+        "path": "cross_validation_folds.csv",
+        "media_type": "text/csv",
+        "role": "cross_validation_fold_evidence"
+      },
+      {
+        "path": "cross_validation_scores.png",
+        "media_type": "image/png",
+        "role": "cross_validation_figure"
+      },
+      {
+        "path": "feature_ablation_folds.csv",
+        "media_type": "text/csv",
+        "role": "feature_ablation_fold_evidence"
+      },
+      {
+        "path": "feature_ablation_scores.png",
+        "media_type": "image/png",
+        "role": "feature_ablation_figure"
+      },
+      {
+        "path": "feature_ablation_summary.csv",
+        "media_type": "text/csv",
+        "role": "feature_ablation_summary"
+      },
+      {
+        "path": "interface_contract.json",
+        "media_type": "application/json",
+        "role": "documented_interface_contract"
+      },
+      {
+        "path": "leakage_diagnostic_folds.csv",
+        "media_type": "text/csv",
+        "role": "negative_control_fold_evidence"
+      },
+      {
+        "path": "leakage_diagnostics.json",
+        "media_type": "application/json",
+        "role": "leakage_diagnostic_protocol"
+      },
+      {
+        "path": "metrics.json",
+        "media_type": "application/json",
+        "role": "complete_evaluation_report"
+      },
+      {
+        "path": "model_comparison.csv",
+        "media_type": "text/csv",
+        "role": "compact_model_comparison"
+      },
+      {
+        "path": "predictions.csv",
+        "media_type": "text/csv",
+        "role": "holdout_row_predictions"
+      },
+      {
+        "path": "probability_calibration.png",
+        "media_type": "image/png",
+        "role": "calibration_figure"
+      },
+      {
+        "path": "probability_calibration_bins.csv",
+        "media_type": "text/csv",
+        "role": "calibration_bin_evidence"
+      },
+      {
+        "path": "probability_calibration_folds.csv",
+        "media_type": "text/csv",
+        "role": "calibration_fold_evidence"
+      },
+      {
+        "path": "probability_calibration_predictions.csv",
+        "media_type": "text/csv",
+        "role": "cross_fitted_probabilities"
+      },
+      {
+        "path": "probability_calibration_summary.csv",
+        "media_type": "text/csv",
+        "role": "calibration_summary"
+      },
+      {
+        "path": "robustness.png",
+        "media_type": "image/png",
+        "role": "validation_perturbation_figure"
+      },
+      {
+        "path": "robustness_diagnostics.json",
+        "media_type": "application/json",
+        "role": "validation_perturbation_protocol"
+      },
+      {
+        "path": "robustness_folds.csv",
+        "media_type": "text/csv",
+        "role": "validation_perturbation_fold_evidence"
+      },
+      {
+        "path": "robustness_summary.csv",
+        "media_type": "text/csv",
+        "role": "validation_perturbation_summary"
+      }
+    ],
+    "reference_manifest": {
+      "path": "checksums.sha256",
+      "producer": "examples/run_demo.py",
+      "covers_generated_artifacts": true
+    }
+  }
+}

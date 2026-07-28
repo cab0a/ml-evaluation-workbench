@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+from dataclasses import fields
 from pathlib import Path
 
 import pandas as pd
 import pytest
 
+from ml_evaluation_workbench import EvaluationResult
+from ml_evaluation_workbench import __all__ as package_exports
 from ml_evaluation_workbench.cli import main
 
 from conftest import DATASET
@@ -24,8 +27,8 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert status == 0
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
     predictions = pd.read_csv(tmp_path / "predictions.csv")
-    assert metrics["project_version"] == "0.7.0"
-    assert metrics["report_version"] == 7
+    assert metrics["project_version"] == "0.8.0"
+    assert metrics["report_version"] == 8
     assert metrics["dataset"]["rows"] == 344
     assert metrics["cross_validation"]["folds"] == 5
     assert len(predictions) == 86
@@ -62,6 +65,21 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
         tmp_path / "class_imbalance_diagnostics.json"
     ).stat().st_size > 0
     assert (tmp_path / "class_imbalance.png").stat().st_size > 0
+    cross_experiment = pd.read_csv(
+        tmp_path / "cross_experiment_summary.csv"
+    )
+    assert len(cross_experiment) == 25
+    assert (tmp_path / "cross_experiment_summary.png").stat().st_size > 0
+    contract = json.loads(
+        (tmp_path / "interface_contract.json").read_text(encoding="utf-8")
+    )
+    assert contract["project_version"] == "0.8.0"
+    assert contract["cli"]["command"] == "evaluate"
+    assert contract["reports"]["metrics_json"]["report_version"] == 8
+    assert contract["python_api"]["package_exports"] == package_exports
+    assert contract["python_api"]["evaluation_result_fields"] == [
+        field.name for field in fields(EvaluationResult)
+    ]
     output = capsys.readouterr().out
     assert "Dummy accuracy:" in output
     assert "Logistic regression macro F1:" in output
@@ -76,6 +94,7 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert "macro F1 at 1.0x feature noise:" in output
     assert "macro F1 at 25% Chinstrap retention:" in output
     assert "Chinstrap recall at 25% retention:" in output
+    assert "Cross-experiment contrasts: 25" in output
 
 
 def test_cli_reports_invalid_test_size(tmp_path: Path, capsys) -> None:
@@ -99,4 +118,4 @@ def test_cli_version(capsys) -> None:
         main(["--version"])
 
     assert exc_info.value.code == 0
-    assert capsys.readouterr().out == "0.7.0\n"
+    assert capsys.readouterr().out == "0.8.0\n"

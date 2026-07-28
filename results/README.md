@@ -1,10 +1,11 @@
-# Version 0.7 Evaluation Result
+# Version 0.8 Evaluation Result
 
 ## Question
 
-How sensitive are the fixed logistic-regression and KNN classifiers when the
-least frequent class is progressively downsampled in otherwise shared outer
-training folds?
+How can representative evidence from six controlled experiment families be
+summarized without hiding paired fold variation, mixing metric direction, or
+disconnecting the summary from its source artifacts? Which CLI, Python API,
+report, and artifact interfaces does this release expose?
 
 ## Controlled Setup
 
@@ -36,14 +37,54 @@ training folds?
   replacement inside each outer training fold
 - Class-imbalance scope: target-class training rows only; validation data and
   labels remain unchanged
+- Cross-experiment selection: fixed representative contrasts across model
+  comparison, feature ablation, shuffled-label control, probability
+  calibration, validation robustness, and class imbalance
+- Difference definition: condition minus reference within each outer fold
+- Preferred-effect definition: the paired difference is sign-aligned so a
+  positive value favors the condition for both higher- and lower-is-better
+  metrics
+- Interface review: generated CLI, Python API, metrics-schema, compatibility,
+  and artifact inventory
 - Random state: 42; label-shuffle seed is 42 plus the one-based fold number
 
 The majority-class dummy remains in the primary comparison but is excluded
 from feature ablation because it does not use input features.
 
-The v0.4 feature-ablation and leakage evidence, v0.5 calibration evidence, and
-v0.6 perturbation evidence are retained as context. The v0.7 comparison does
-not tune the models or select retention levels from the reported scores.
+The v0.4 feature-ablation and leakage evidence, v0.5 calibration evidence,
+v0.6 perturbation evidence, and v0.7 class-imbalance evidence are retained in
+full. The v0.8 summary does not tune models, select conditions from reported
+effect sizes, or replace any experiment-specific artifact.
+
+## Cross-Experiment Summary
+
+The summary contains 25 representative contrasts selected by a fixed policy.
+It includes all three primary model comparisons, all four single-feature
+ablations, both shuffled-label controls, four probability metrics for each
+substantive model, the highest tested severity for each robustness protocol,
+and the 25% class-retention condition for macro F1 and target-class recall.
+
+| Experiment | Condition vs Reference | Metric | Raw Difference | Preferred Effect |
+| --- | --- | --- | ---: | ---: |
+| Model comparison | KNN vs majority dummy | Macro F1 | +0.744821 | +0.744821 |
+| Feature ablation | Bill depth only vs both, logistic | Macro F1 | -0.359387 | -0.359387 |
+| Negative control | Shuffled vs observed, logistic | Macro F1 | -0.674498 | -0.674498 |
+| Calibration | Sigmoid vs uncalibrated, logistic | Log loss | +0.097598 | -0.097598 |
+| Calibration | Sigmoid vs uncalibrated, KNN | Log loss | -0.147563 | +0.147563 |
+| Robustness | 50% missing vs unperturbed, KNN | Macro F1 | -0.324134 | -0.324134 |
+| Class imbalance | 25% vs 100% Chinstrap, logistic | Chinstrap recall | -0.203297 | -0.203297 |
+
+The raw and preferred effects differ only for lower-is-better metrics. Every
+row retains the reference and condition fold mean and population standard
+deviation, the paired-difference mean and standard deviation, a source
+artifact, and an interpretation boundary.
+
+![Representative cross-experiment macro-F1 contrasts](cross_experiment_summary.png)
+
+The figure includes only the 15 macro-F1 contrasts so the horizontal scale has
+one meaning. Accuracy, log loss, multiclass Brier score, top-label ECE, and
+target-class recall remain in `cross_experiment_summary.csv`; their magnitudes
+must not be compared across metric scales.
 
 ## Primary Comparison Reference
 
@@ -219,12 +260,31 @@ and paired differences from full retention.
 `class_imbalance_diagnostics.json` fixes target selection, sampling, seed, and
 interpretation rules.
 
+## Interface Contract
+
+`interface_contract.json` is a machine-readable snapshot of the v0.8.0
+interfaces:
+
+- contract schema version 1 and pre-1.0 stability status
+- Python 3.10 through 3.14 compatibility
+- the `evaluate` CLI command, its arguments, defaults, and exit codes
+- package exports, `evaluate_dataset` parameters, and `EvaluationResult`
+  fields
+- `metrics.json` report schema version 8 and its top-level keys
+- all 27 generated artifacts, media types, and roles
+
+The contract is generated during evaluation. Its artifact inventory and
+result fields use implementation-level definitions, while the documented CLI
+and Python surfaces are reviewed for this release. It supports review for
+accidental drift; it does not promise that every pre-1.0 interface will remain
+unchanged.
+
 ## Continuity Artifacts
 
 The deterministic holdout, three-model comparison, fold-level scores,
 row-level predictions, and logistic-regression confusion matrix from v0.3 are
 retained alongside the v0.4 diagnostics and v0.5 calibration evidence, then
-regenerated under report schema version 7.
+regenerated under report schema version 8.
 
 ![Cross-validation fold scores](cross_validation_scores.png)
 
@@ -232,11 +292,19 @@ regenerated under report schema version 7.
 
 ## Interpretation Boundary
 
-Version 0.7 adds controlled training-prevalence sensitivity evidence, not a
-deployment-performance guarantee. The class-imbalance, robustness, and
-calibration comparisons, ablation, and negative control reuse one five-fold
-outer partition and one public dataset revision. Their standard deviations
-describe observed fold variation and are not confidence intervals.
+Version 0.8 adds a cross-experiment navigation layer and interface snapshot,
+not a statistical meta-analysis or deployment-performance guarantee. The
+class-imbalance, robustness, calibration, ablation, model, and negative-control
+comparisons reuse one five-fold outer partition and one public dataset
+revision. Their standard deviations describe observed fold variation and are
+not confidence intervals.
+
+The summary policy is fixed but selective. It uses the highest tested
+robustness severity and the lowest tested class-retention level, so it does
+not reproduce every condition. Preferred effects align favorable direction
+but are not standardized; their magnitudes cannot be compared across metrics.
+The interface contract is a reviewed pre-1.0 snapshot, not a 1.x
+compatibility guarantee.
 
 The reliability diagram uses top-label confidence rather than classwise
 calibration and depends on ten fixed bins. Empty or sparsely populated bins
@@ -261,8 +329,9 @@ level; other retained rows may produce different curves.
 The committed artifacts demonstrate a deterministic implementation of feature
 ablation, split-integrity checks, a negative control, cross-fitted probability
 diagnostics, synthetic robustness experiments, and controlled class
-downsampling. They are not a benchmark claim, causal feature-importance
-result, deployment guarantee, prevalence forecast, or ecological conclusion.
+downsampling, plus a traceable cross-experiment summary. They are not a
+benchmark claim, causal feature-importance result, deployment guarantee,
+prevalence forecast, or ecological conclusion.
 
 ## Reproduction
 

@@ -4,15 +4,19 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import fields
 from pathlib import Path
 from typing import Sequence
 
+from . import __all__ as package_exports
 from . import __version__
 from .dataset import load_dataset, sha256_file
-from .evaluation import evaluate_dataset
+from .evaluation import EvaluationResult, evaluate_dataset
+from .interface import build_interface_contract
 from .reporting import (
     write_class_imbalance_scores,
     write_confusion_matrix,
+    write_cross_experiment_summary,
     write_cross_validation_scores,
     write_csv,
     write_feature_ablation_scores,
@@ -54,6 +58,9 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         ],
         "robustness": result.metrics["robustness"],
         "class_imbalance": result.metrics["class_imbalance"],
+        "cross_experiment_summary": result.metrics[
+            "cross_experiment_summary"
+        ],
     }
 
     metrics_path = write_json(output_dir / "metrics.json", result.metrics)
@@ -149,6 +156,27 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     class_imbalance_plot_path = write_class_imbalance_scores(
         output_dir / "class_imbalance.png",
         result.class_imbalance_summary,
+    )
+    cross_experiment_summary_path = write_csv(
+        output_dir / "cross_experiment_summary.csv",
+        result.cross_experiment_summary,
+    )
+    cross_experiment_plot_path = write_cross_experiment_summary(
+        output_dir / "cross_experiment_summary.png",
+        result.cross_experiment_summary,
+    )
+    interface_contract = build_interface_contract(
+        project_version=__version__,
+        report_version=result.metrics["report_version"],
+        package_exports=package_exports,
+        metrics_top_level_keys=list(result.metrics),
+        evaluation_result_fields=[
+            field.name for field in fields(EvaluationResult)
+        ],
+    )
+    interface_contract_path = write_json(
+        output_dir / "interface_contract.json",
+        interface_contract,
     )
 
     dummy = result.metrics["models"]["dummy"]
@@ -253,6 +281,10 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
             "retention: "
             f"{retained_quarter['target_class_recall']['mean']:.3f}"
         )
+    print(
+        "Cross-experiment contrasts: "
+        f"{len(result.cross_experiment_summary)}"
+    )
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
     print(f"Confusion matrix: {confusion_path}")
@@ -283,6 +315,9 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         f"{class_imbalance_diagnostics_path}"
     )
     print(f"Class-imbalance plot: {class_imbalance_plot_path}")
+    print(f"Cross-experiment summary: {cross_experiment_summary_path}")
+    print(f"Cross-experiment plot: {cross_experiment_plot_path}")
+    print(f"Interface contract: {interface_contract_path}")
     return 0
 
 

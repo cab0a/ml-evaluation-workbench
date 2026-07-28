@@ -51,6 +51,9 @@ def test_evaluation_is_deterministic(penguins_frame) -> None:
         first.class_imbalance_diagnostics
         == second.class_imbalance_diagnostics
     )
+    assert first.cross_experiment_summary.equals(
+        second.cross_experiment_summary
+    )
     assert np.array_equal(first.confusion, second.confusion)
 
 
@@ -574,6 +577,58 @@ def test_class_imbalance_records_counts_recall_and_summaries(
             float(fold_rows["recall_chinstrap"].mean()),
             6,
         )
+
+
+def test_cross_experiment_summary_uses_fixed_representative_contrasts(
+    evaluation_result,
+) -> None:
+    result = evaluation_result
+    summary = result.cross_experiment_summary
+    metadata = result.metrics["cross_experiment_summary"]
+
+    assert len(summary) == 25
+    assert metadata["schema_version"] == 1
+    assert metadata["row_count"] == len(summary)
+    assert metadata["selection_policy"] == (
+        "fixed_representative_contrasts_not_selected_by_effect_size"
+    )
+    assert metadata["metrics_are_not_cross_scale_comparable"] is True
+    assert set(summary["experiment"]) == {
+        "model_comparison",
+        "feature_ablation",
+        "shuffled_label_control",
+        "probability_calibration",
+        "validation_robustness",
+        "class_imbalance",
+    }
+    assert set(summary["folds"]) == {5}
+    assert summary["comparison"].notna().all()
+    assert summary["source_artifact"].notna().all()
+
+
+def test_cross_experiment_preferred_effect_respects_metric_direction(
+    evaluation_result,
+) -> None:
+    summary = evaluation_result.cross_experiment_summary
+
+    for row in summary.itertuples(index=False):
+        expected = row.condition_minus_reference_mean
+        if row.preferred_direction == "lower":
+            expected = -expected
+        assert row.preferred_effect_mean == round(expected, 6)
+
+    knn_log_loss = summary[
+        (summary["experiment"] == "probability_calibration")
+        & (summary["model"] == "knn")
+        & (summary["metric"] == "log_loss")
+    ].iloc[0]
+    logistic_log_loss = summary[
+        (summary["experiment"] == "probability_calibration")
+        & (summary["model"] == "logistic_regression")
+        & (summary["metric"] == "log_loss")
+    ].iloc[0]
+    assert knn_log_loss["preferred_effect_mean"] > 0
+    assert logistic_log_loss["preferred_effect_mean"] < 0
 
 
 @pytest.mark.parametrize("test_size", [0.0, 1.0, -0.1, 1.1])
