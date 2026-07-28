@@ -2,9 +2,19 @@
 
 ## 日本語概要
 
-このディレクトリには、固定したPalmer Penguinsデータに対するモデル比較、feature ablation、leakage diagnostics、probability calibration、robustness、class-imbalance sensitivityの評価結果があります。ML評価の設計、fold-level evidence、row-level predictions、再現可能な成果物を確認したい技術者向けです。
+このディレクトリには、固定したPalmer Penguinsデータに対するモデル比較の結果があります。
 
-v1.0.0では実験条件や数値結果を変更せず、CLI、Python API、27個の成果物名、15種類のCSV列順、5種類のJSONトップレベルキーを1.x安定インターフェースとして固定しました。成果物のSHA-256検証、評価方法、結果の解釈、再現手順、安定性と適用範囲の詳細は以下の英語本文を参照してください。
+ML評価の設計、fold-level evidence、row-level predictions、再現可能な成果物を確認したい技術者向けです。
+
+主な内容は次のとおりです。
+
+- feature ablation、leakage diagnostics、probability calibration
+- robustness、class-imbalance sensitivity
+- fold-level evidence、row-level predictions、再現可能な成果物
+
+v1.0.0では実験条件や数値結果を変更せず、CLI、Python API、27個の成果物名、15種類のCSV列順、5種類のJSONトップレベルキーを1.x安定インターフェースとして固定しました。
+
+成果物のSHA-256検証、評価方法、結果の解釈、再現手順、安定性と適用範囲の詳細は以下の英語本文を参照してください。
 
 ---
 
