@@ -1,4 +1,4 @@
-# Version 0.9 Evaluation Result
+# Version 1.0 Evaluation Result
 
 ## 日本語概要
 
@@ -7,17 +7,18 @@ ablation、leakage diagnostics、probability calibration、robustness、
 class-imbalance sensitivityの評価結果があります。ML評価の設計、fold-level evidence、
 row-level predictions、再現可能な成果物を確認したい技術者向けです。
 
-v0.9.0では実験条件や数値結果を変更せず、27個の成果物を検証する公開`verify` CLI、
-checksum manifestの自動生成、Python 3.12参照環境を整備しました。評価方法、結果の
-解釈、再現手順、適用範囲の詳細は以下の英語本文を参照してください。
+v1.0.0では実験条件や数値結果を変更せず、CLI、Python API、27個の成果物名、
+15種類のCSV列順、5種類のJSONトップレベルキーを1.x安定インターフェースとして
+固定しました。成果物のSHA-256検証、評価方法、結果の解釈、再現手順、安定性と
+適用範囲の詳細は以下の英語本文を参照してください。
 
 ---
 
 ## Question
 
-Can the committed evaluation be regenerated and independently verified through
-documented public commands, while separating broad runtime compatibility from
-the environment used for byte-exact reference reproduction?
+Can a compact evaluation project expose stable, reviewable interfaces while
+preserving byte-exact reference reproduction and the interpretation boundary
+of its controlled numerical evidence?
 
 ## Controlled Setup
 
@@ -58,6 +59,8 @@ the environment used for byte-exact reference reproduction?
   metrics
 - Interface review: generated CLI, Python API, metrics-schema, compatibility,
   and artifact inventory
+- Stable schema review: all 15 CSV column sequences and all five JSON
+  top-level key sequences
 - Numerical scope: unchanged from v0.8; no model, split, metric, or experiment
   condition is added or retuned
 - Artifact verification: `checksums.sha256` covers all 27 documented report
@@ -73,7 +76,7 @@ from feature ablation because it does not use input features.
 
 The v0.4 feature-ablation and leakage evidence, v0.5 calibration evidence,
 v0.6 perturbation evidence, v0.7 class-imbalance evidence, and the v0.8 summary
-are retained in full. Version 0.9 does not tune models, select conditions from
+are retained in full. Version 1.0 does not tune models, select conditions from
 reported effect sizes, or change the numerical evaluation.
 
 ## Cross-Experiment Summary
@@ -280,25 +283,32 @@ and paired differences from full retention.
 `class_imbalance_diagnostics.json` fixes target selection, sampling, seed, and
 interpretation rules.
 
-## Interface Contract
+## Stable Release Review
 
-`interface_contract.json` is a machine-readable snapshot of the v0.9.0
-interfaces:
+`interface_contract.json` is the machine-readable v1.0.0 stability contract:
 
-- contract schema version 2 and pre-1.0 stability status
+- contract schema version 3 and `stable_1_x` status
 - Python 3.10 through 3.14 compatibility
 - the `evaluate` and `verify` CLI commands, their arguments, defaults, and exit
   codes
 - package exports, public function parameters, and `EvaluationResult` fields
 - `metrics.json` report schema version 8 and its top-level keys
 - all 27 generated artifacts, media types, and roles
+- ordered columns for all 15 CSV artifacts
+- ordered top-level keys for all five JSON artifacts
 - reference-environment and compatibility-matrix expectations
 
 The contract is generated during evaluation. Its artifact inventory and
 result fields use implementation-level definitions, while the documented CLI
-and Python surfaces are reviewed for this release. It supports review for
-accidental drift; it does not promise that every pre-1.0 interface will remain
-unchanged.
+and Python surfaces are reviewed for this release. Regression tests compare
+the committed artifacts with the declared schema registry and explicitly
+check CLI defaults, Python exports, public function signatures, result fields,
+and artifact names.
+
+Documented interfaces remain backward compatible within 1.x. A breaking
+change requires a new major version. This stability policy covers software
+interfaces and the reproduction workflow, not model performance on external
+or production data.
 
 ## Reproducibility Review
 
@@ -332,22 +342,22 @@ regenerated under report schema version 8.
 
 ## Interpretation Boundary
 
-Version 0.9 adds documentation and reproducibility controls, not another
-experiment, a statistical meta-analysis, or a deployment-performance
-guarantee. The class-imbalance, robustness, calibration, ablation, model, and
-negative-control comparisons reuse one five-fold outer partition and one
-public dataset revision. Their standard deviations describe observed fold
-variation and are not confidence intervals.
+Version 1.0 stabilizes software interfaces and reproducibility controls; it
+does not add another experiment, a statistical meta-analysis, or a
+deployment-performance guarantee. The class-imbalance, robustness,
+calibration, ablation, model, and negative-control comparisons reuse one
+five-fold outer partition and one public dataset revision. Their standard
+deviations describe observed fold variation and are not confidence intervals.
 
 The summary policy is fixed but selective. It uses the highest tested
 robustness severity and the lowest tested class-retention level, so it does
 not reproduce every condition. Preferred effects align favorable direction
 but are not standardized; their magnitudes cannot be compared across metrics.
-The interface contract is a reviewed pre-1.0 snapshot, not a 1.x
-compatibility guarantee. The reference constraints are specific to Python
-3.12 and the documented Ubuntu CI environment. Other supported environments
-must produce a valid self-consistent report set, but exact image bytes can
-differ with rendering or dependency behavior.
+The stable interface contract does not freeze numerical results for arbitrary
+new inputs or dependency environments. The reference constraints are specific
+to Python 3.12 and the documented Ubuntu CI environment. Other supported
+environments must produce a valid self-consistent report set, but exact image
+bytes can differ with rendering or dependency behavior.
 
 The reliability diagram uses top-label confidence rather than classwise
 calibration and depends on ten fixed bins. Empty or sparsely populated bins

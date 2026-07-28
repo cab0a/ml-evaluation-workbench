@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.0.0] - 2026-07-28
+
+### Added
+
+- Explicit stable-interface regression tests for CLI defaults, Python exports,
+  public function signatures, `EvaluationResult` fields, and artifact names
+- Machine-readable schema registry for the ordered columns of all 15 CSV
+  artifacts and the ordered top-level keys of all five JSON artifacts
+
+### Changed
+
+- Interface-contract schema updated to version 3 with a backward-compatible
+  1.x policy and a major-version boundary for breaking changes
+- Project version and development-status metadata updated for the stable
+  software release
+- Documentation reviewed to distinguish interface stability and reproducible
+  artifacts from model deployment readiness
+- Evaluation report schema retained at version 8 because numerical results,
+  models, splits, metrics, and experiment conditions are unchanged
+
 ## [0.9.0] - 2026-07-28
 
 ### Added

@@ -9,10 +9,11 @@ regression、5-nearest neighborsを比較するML評価プロジェクトです�
 fold-level metrics、row-level predictions、feature ablation、split integrity、
 shuffled-label negative control、probability calibration、validation robustness、
 class-imbalance sensitivityと、6種類の実験から固定方針で選んだ25件の代表比較を
-含みます。v0.9.0では、公開`verify` CLI、評価時のchecksum manifest自動生成、
-Python 3.12参照環境のconstraintsを追加し、文書と再現手順を実装・CIと照合しました。
-前処理は各training partition内でfitされ、27個の成果物はSHA-256で検証できます。
-結果の適用範囲と制約の詳細は英語本文を参照してください。
+含みます。v1.0.0では数値実験を変更せず、CLI、Python API、27個の成果物名、
+15種類のCSV列順、5種類のJSONトップレベルキーを1.x安定インターフェースとして
+固定しました。前処理は各training partition内でfitされ、成果物はSHA-256と
+Python 3.12参照環境で再現性を検証できます。安定性の範囲、評価結果の適用限界、
+再現手順の詳細は英語本文を参照してください。
 
 ---
 
@@ -27,11 +28,11 @@ ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
 
 **Question → Controlled Comparison → Diagnostics → Interpretation**
 
-Version 0.9.0 reviews documentation and reproducibility without adding another
-model experiment. Evaluation now writes its checksum manifest automatically,
-a public `verify` command checks all 27 report artifacts, and a Python 3.12
-constraints file defines the reference dependency environment used for
-byte-exact CI regeneration.
+Version 1.0.0 is the stable portfolio release. It preserves the v0.8 numerical
+evaluation and the v0.9 reproducibility workflow while defining the CLI,
+Python API, artifact inventory, CSV column order, and JSON top-level keys as
+backward-compatible 1.x interfaces. Regression tests and a generated
+machine-readable contract guard those surfaces against accidental drift.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
@@ -102,6 +103,8 @@ This project keeps those decisions explicit:
 - Fixed representative contrasts across six experiment families
 - Direction-aligned effect values with preserved paired fold variation
 - Machine-readable CLI, Python API, report, and artifact interface contract
+- Stable 1.x contract for CLI behavior, Python API, and artifact schemas
+- Regression checks for 15 CSV schemas and five JSON top-level key sets
 - Public checksum verification through `ml-evaluation-workbench verify`
 - Automatic manifest generation after every successful evaluation
 - Python 3.12 reference constraints for byte-exact artifact regeneration
@@ -159,7 +162,7 @@ ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
 ml-evaluation-workbench verify ARTIFACT_DIR
 ```
 
-The documented v0.9 evaluation command is:
+The documented v1.0 evaluation command is:
 
 ```bash
 ml-evaluation-workbench evaluate data/penguins.csv \
@@ -259,7 +262,7 @@ columns. The data are available under CC0 1.0.
 
 Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
 sex, body mass, flipper length, and observation year are intentionally excluded
-from v0.9. This keeps the question interpretable and avoids relying on
+from v1.0. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
@@ -399,10 +402,11 @@ source artifact, and interpretation. `cross_experiment_summary.png` visualizes
 the 15 macro-F1 contrasts only, avoiding magnitude comparisons across
 incompatible metric scales.
 
-`interface_contract.json` records interface-contract schema version 2, the
+`interface_contract.json` records interface-contract schema version 3, the
 project and report versions, Python compatibility, both CLI commands and exit
 codes, package exports, public function signatures, `EvaluationResult` fields,
-top-level metrics keys, generated artifacts, and reference-environment policy.
+generated artifacts, all 15 CSV column sequences, top-level keys for all five
+JSON artifacts, and the reference-environment policy.
 
 `confusion_matrix.png` visualizes the logistic-regression holdout errors.
 `cross_validation_scores.png` shows all three models' aggregate scores in
@@ -559,7 +563,7 @@ between this controlled result and a general performance claim.
 
 ## Limitations
 
-- Version 0.9.0 evaluates one small dataset with one deterministic holdout and
+- Version 1.0.0 evaluates one small dataset with one deterministic holdout and
   one five-fold stratified cross-validation run.
 - A random row split does not measure transfer across islands, years, field
   conditions, or independent collection programs.
@@ -590,7 +594,7 @@ between this controlled result and a general performance claim.
 - Gaussian perturbations are independent, zero mean, and scaled from training
   folds. They do not model bias, outliers, correlated sensor noise, or drift.
 - Structured missingness, label noise, combined perturbations, and changes to
-  non-target training classes are outside the v0.9 scope.
+  non-target training classes are outside the v1.0 scope.
 - The class-imbalance experiment downsamples only Chinstrap, selected because
   it is globally least frequent in this dataset. It does not evaluate other
   target classes, oversampling, class weighting, threshold changes, or
@@ -605,9 +609,10 @@ between this controlled result and a general performance claim.
   and class-retention severities.
 - Direction alignment makes favorable signs consistent, but preferred effects
   from different metrics are not standardized or comparable by magnitude.
-- The interface contract documents v0.9.0 behavior. It is not a 1.x
-  compatibility promise, and additive or explicitly versioned changes can
-  still occur before v1.0.
+- The stable contract covers documented software interfaces and the
+  reproduction workflow. It does not guarantee model quality, dependency
+  behavior outside the supported ranges, or byte-identical output outside the
+  reference environment.
 - The Python 3.12 constraints define the byte-exact reference environment, not
   the only supported environment. Other supported Python and dependency
   combinations are checked for successful, self-consistent generation rather
@@ -622,10 +627,10 @@ between this controlled result and a general performance claim.
 - The result is not intended for field identification, ecological inference,
   or decisions affecting wildlife.
 
-## Interface Contract
+## Stable Interfaces
 
-Version 0.9.0 reviews and records the surfaces a downstream reviewer can
-depend on for this release:
+Version 1.0.0 defines the documented surfaces that downstream users can depend
+on throughout the 1.x release line:
 
 - CLI: `evaluate` with the five documented options and `verify` with an
   artifact directory
@@ -633,8 +638,11 @@ depend on for this release:
 - Python exports including `evaluate_dataset`, `EvaluationResult`, and
   `verify_artifact_manifest`
 - `metrics.json` report schema version 8 and its top-level sections
-- Interface-contract schema version 2
-- Twenty-seven generated artifacts, their roles, and the checksum manifest
+- Interface-contract schema version 3
+- Twenty-seven generated artifact names, their roles, and the checksum
+  manifest
+- Ordered columns for all 15 CSV artifacts
+- Ordered top-level keys for all five JSON artifacts
 - Python 3.10 through 3.14 compatibility exercised in CI
 - Python 3.12 plus `requirements-reproducibility.txt` as the byte-exact
   reference environment
@@ -642,9 +650,13 @@ depend on for this release:
 [`interface_contract.json`](results/interface_contract.json) is generated with
 each evaluation. Its artifact inventory and `EvaluationResult` fields come
 from implementation-level definitions, while the documented CLI and Python
-surfaces are explicitly reviewed for this release. The project remains
-pre-1.0: these interfaces are versioned and documented, but the contract
-allows additive or versioned changes before the stable release.
+surfaces are explicitly reviewed for this release. Backward-compatible
+additions and corrections can occur in later 1.x releases; removing or
+changing a documented stable interface requires a new major version.
+
+This promise concerns software interfaces and reproducible evaluation
+artifacts. It does not make the fitted examples production-ready or guarantee
+their performance on new data.
 
 ## Reproducibility
 
@@ -689,7 +701,8 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-Tests cover dataset validation, holdout and cross-validation behavior,
+Tests cover stable interface regression, dataset validation, holdout and
+cross-validation behavior,
 feature-ablation accounting, leakage diagnostics, robustness and
 class-imbalance protocols, cross-experiment selection and metric direction,
 interface-contract contents, report schemas, CLI arguments and errors,
@@ -701,11 +714,11 @@ a Python 3.12 regeneration to match committed `results/`.
 
 ## Compatibility
 
-Python 3.10 through 3.14 are exercised in CI. Version 0.9.0 is an alpha
-evaluation project, so consumers should treat the documented command,
-`metrics.json` report version, and CSV columns as versioned interfaces rather
-than as a 1.x stability guarantee. Release changes are recorded in
-[`CHANGELOG.md`](CHANGELOG.md).
+Python 3.10 through 3.14 are exercised in CI. Version 1.0.0 marks the
+documented CLI, Python API, artifact names, CSV column order, and JSON
+top-level keys as stable within 1.x. This software stability statement does
+not imply that the example models are suitable for production deployment.
+Release changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Project Structure
 
@@ -776,8 +789,10 @@ ml-evaluation-workbench/
 - **v0.6:** Missing-value and noise robustness
 - **v0.7:** Class-imbalance sensitivity
 - **v0.8:** Cross-experiment summaries and interface review
-- **v0.9 (current):** Documentation and reproducibility review
-- **v1.0:** Stable portfolio release
+- **v0.9:** Documentation and reproducibility review
+- **v1.0 (current):** Stable portfolio release and 1.x interface contract
+- **v1.x maintenance:** Backward-compatible fixes, dependency review, and
+  documentation improvements
 
 ## License
 
