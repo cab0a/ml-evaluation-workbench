@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass
 from typing import Any
 
@@ -61,6 +62,7 @@ CALIBRATION_BIN_COUNT = 10
 MISSING_RATES = (0.0, 0.1, 0.25, 0.5)
 NOISE_STD_MULTIPLIERS = (0.0, 0.25, 0.5, 1.0)
 ROBUSTNESS_PERTURBATIONS = ("missing_values", "gaussian_noise")
+CLASS_RETENTION_FRACTIONS = (1.0, 0.75, 0.5, 0.25)
 
 
 @dataclass(slots=True)
@@ -80,6 +82,9 @@ class EvaluationResult:
     robustness_folds: pd.DataFrame
     robustness_summary: pd.DataFrame
     robustness_diagnostics: dict[str, Any]
+    class_imbalance_folds: pd.DataFrame
+    class_imbalance_summary: pd.DataFrame
+    class_imbalance_diagnostics: dict[str, Any]
     confusion: np.ndarray
     labels: tuple[str, ...]
 
@@ -1127,6 +1132,250 @@ def _robustness_evaluation(
     return fold_scores, pd.DataFrame(summary_rows), diagnostics
 
 
+def _downsample_training_class(
+    train_indices: np.ndarray,
+    target: pd.Series,
+    *,
+    target_class: str,
+    retention_fraction: float,
+    seed: int,
+) -> tuple[np.ndarray, int, int, str]:
+    training_target = target.iloc[train_indices].astype(str).to_numpy()
+    target_indices = train_indices[training_target == target_class]
+    other_indices = train_indices[training_target != target_class]
+    original_target_rows = len(target_indices)
+    retained_target_rows = max(
+        1,
+        int(round(original_target_rows * retention_fraction)),
+    )
+    if retained_target_rows == original_target_rows:
+        retained_target_indices = target_indices.copy()
+    else:
+        rng = np.random.default_rng(seed)
+        retained_target_indices = rng.choice(
+            target_indices,
+            size=retained_target_rows,
+            replace=False,
+        )
+    resampled_indices = np.sort(
+        np.concatenate((other_indices, retained_target_indices))
+    )
+    source_rows = np.sort(retained_target_indices) + 2
+    signature = hashlib.sha256(
+        ",".join(str(int(value)) for value in source_rows).encode("utf-8")
+    ).hexdigest()
+    return (
+        resampled_indices,
+        original_target_rows,
+        retained_target_rows,
+        signature,
+    )
+
+
+def _class_imbalance_evaluation(
+    frame: pd.DataFrame,
+    *,
+    labels: tuple[str, ...],
+    random_state: int,
+    splits: tuple[tuple[np.ndarray, np.ndarray], ...],
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, Any]]:
+    features = frame[list(FEATURES)]
+    target = frame[TARGET]
+    global_class_counts = target.astype(str).value_counts()
+    smallest_count = int(global_class_counts.min())
+    target_class = min(
+        label
+        for label, count in global_class_counts.items()
+        if int(count) == smallest_count
+    )
+    rows: list[dict[str, Any]] = []
+
+    for fold, (train_indices, validation_indices) in enumerate(
+        splits,
+        start=1,
+    ):
+        original_training_target = target.iloc[train_indices]
+        original_target_rows = int(
+            (original_training_target.astype(str) == target_class).sum()
+        )
+        for condition_index, retention_fraction in enumerate(
+            CLASS_RETENTION_FRACTIONS
+        ):
+            seed = random_state + 30_000 + fold * 100 + condition_index
+            (
+                resampled_indices,
+                observed_original_target_rows,
+                retained_target_rows,
+                retained_rows_signature,
+            ) = _downsample_training_class(
+                train_indices,
+                target,
+                target_class=target_class,
+                retention_fraction=retention_fraction,
+                seed=seed,
+            )
+            if observed_original_target_rows != original_target_rows:
+                raise RuntimeError("Target-class row accounting mismatch")
+            resampled_target = target.iloc[resampled_indices]
+            class_counts_after = resampled_target.astype(str).value_counts()
+
+            for model_name in DIAGNOSTIC_MODEL_NAMES:
+                model = _models(random_state)[model_name]
+                model.fit(
+                    features.iloc[resampled_indices],
+                    resampled_target,
+                )
+                predicted = model.predict(features.iloc[validation_indices])
+                scores = _model_metrics(
+                    target.iloc[validation_indices],
+                    predicted,
+                    labels,
+                )
+                row: dict[str, Any] = {
+                    "target_class": target_class,
+                    "retention_fraction": retention_fraction,
+                    "fold": fold,
+                    "model": model_name,
+                    "resampling_seed": seed,
+                    "original_train_rows": len(train_indices),
+                    "resampled_train_rows": len(resampled_indices),
+                    "validation_rows": len(validation_indices),
+                    "original_target_rows": original_target_rows,
+                    "retained_target_rows": retained_target_rows,
+                    "dropped_target_rows": (
+                        original_target_rows - retained_target_rows
+                    ),
+                    "target_share_before": round(
+                        original_target_rows / len(train_indices),
+                        6,
+                    ),
+                    "target_share_after": round(
+                        retained_target_rows / len(resampled_indices),
+                        6,
+                    ),
+                    "retained_target_source_rows_sha256": (
+                        retained_rows_signature
+                    ),
+                    **{
+                        score_name: scores[score_name]
+                        for score_name in SCORE_NAMES
+                    },
+                }
+                row.update(
+                    {
+                        f"train_rows_{label.lower()}": int(
+                            class_counts_after.get(label, 0)
+                        )
+                        for label in labels
+                    }
+                )
+                row.update(
+                    {
+                        f"recall_{label.lower()}": value
+                        for label, value in scores[
+                            "per_class_recall"
+                        ].items()
+                    }
+                )
+                rows.append(row)
+
+    fold_scores = pd.DataFrame(rows)
+    target_recall_column = f"recall_{target_class.lower()}"
+    measurement_columns = {
+        **{score_name: score_name for score_name in SCORE_NAMES},
+        "target_class_recall": target_recall_column,
+    }
+    summary_rows: list[dict[str, Any]] = []
+    condition_summaries: dict[str, Any] = {}
+    for retention_fraction in CLASS_RETENTION_FRACTIONS:
+        condition_key = f"{retention_fraction:g}"
+        condition_summaries[condition_key] = {}
+        for model_name in DIAGNOSTIC_MODEL_NAMES:
+            condition_rows = fold_scores[
+                (fold_scores["retention_fraction"] == retention_fraction)
+                & (fold_scores["model"] == model_name)
+            ].set_index("fold")
+            reference_rows = fold_scores[
+                (fold_scores["retention_fraction"] == 1.0)
+                & (fold_scores["model"] == model_name)
+            ].set_index("fold")
+            summary_row: dict[str, Any] = {
+                "target_class": target_class,
+                "retention_fraction": retention_fraction,
+                "model": model_name,
+                "retained_target_rows_mean": round(
+                    float(condition_rows["retained_target_rows"].mean()),
+                    6,
+                ),
+                "target_share_after_mean": round(
+                    float(condition_rows["target_share_after"].mean()),
+                    6,
+                ),
+            }
+            condition_metrics: dict[str, Any] = {}
+            for metric_name, column_name in measurement_columns.items():
+                metric_summary = _score_summary(
+                    condition_rows[column_name]
+                )
+                paired_difference = _score_summary(
+                    condition_rows[column_name]
+                    - reference_rows[column_name]
+                )
+                condition_metrics[metric_name] = {
+                    **metric_summary,
+                    "paired_difference_vs_full_retention": (
+                        paired_difference
+                    ),
+                }
+                summary_row[f"{metric_name}_mean"] = metric_summary["mean"]
+                summary_row[f"{metric_name}_std"] = metric_summary["std"]
+                summary_row[
+                    f"{metric_name}_difference_vs_full_retention_mean"
+                ] = paired_difference["mean"]
+            condition_summaries[condition_key][
+                model_name
+            ] = condition_metrics
+            summary_rows.append(summary_row)
+
+    diagnostics = {
+        "strategy": "shared_outer_fold_training_class_downsampling",
+        "outer_folds": len(splits),
+        "target_class": target_class,
+        "target_class_selection": (
+            "globally_least_frequent_class_ties_broken_lexicographically"
+        ),
+        "global_class_counts": {
+            label: int(global_class_counts.get(label, 0))
+            for label in labels
+        },
+        "retention_fractions": list(CLASS_RETENTION_FRACTIONS),
+        "sampling": (
+            "without_replacement_nearest_integer_minimum_one_target_row"
+        ),
+        "seed_rule": {
+            "description": (
+                "random_state_plus_30000_plus_fold_times_100"
+                "_plus_condition_index"
+            ),
+            "shared_across_models": True,
+        },
+        "training_data": (
+            "target_class_rows_only_downsampled_features_and_labels_paired"
+        ),
+        "validation_data": "unchanged",
+        "validation_labels": "unchanged",
+        "summary": {
+            "standard_deviation": "population_across_folds",
+            "conditions": condition_summaries,
+        },
+        "interpretation": (
+            "controlled_training_prevalence_sensitivity"
+            "_not_deployment_prevalence_or_cost_analysis"
+        ),
+    }
+    return fold_scores, pd.DataFrame(summary_rows), diagnostics
+
+
 def evaluate_dataset(
     frame: pd.DataFrame,
     *,
@@ -1217,6 +1466,16 @@ def evaluate_dataset(
         random_state=random_state,
         splits=splits,
     )
+    (
+        class_imbalance_folds,
+        class_imbalance_summary,
+        class_imbalance_diagnostics,
+    ) = _class_imbalance_evaluation(
+        frame,
+        labels=labels,
+        random_state=random_state,
+        splits=splits,
+    )
     indices = np.arange(len(frame))
     train_indices, test_indices = train_test_split(
         indices,
@@ -1280,7 +1539,7 @@ def evaluate_dataset(
         cross_validation_summary,
     )
     metrics = {
-        "report_version": 6,
+        "report_version": 7,
         "dataset": {
             "rows": len(frame),
             "target": TARGET,
@@ -1307,6 +1566,7 @@ def evaluate_dataset(
         "leakage_diagnostics": leakage_diagnostics,
         "probability_calibration": probability_calibration_metrics,
         "robustness": robustness_diagnostics,
+        "class_imbalance": class_imbalance_diagnostics,
     }
     return EvaluationResult(
         metrics=metrics,
@@ -1324,6 +1584,9 @@ def evaluate_dataset(
         robustness_folds=robustness_folds,
         robustness_summary=robustness_summary,
         robustness_diagnostics=robustness_diagnostics,
+        class_imbalance_folds=class_imbalance_folds,
+        class_imbalance_summary=class_imbalance_summary,
+        class_imbalance_diagnostics=class_imbalance_diagnostics,
         confusion=logistic_confusion,
         labels=labels,
     )

@@ -24,8 +24,8 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert status == 0
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
     predictions = pd.read_csv(tmp_path / "predictions.csv")
-    assert metrics["project_version"] == "0.6.0"
-    assert metrics["report_version"] == 6
+    assert metrics["project_version"] == "0.7.0"
+    assert metrics["report_version"] == 7
     assert metrics["dataset"]["rows"] == 344
     assert metrics["cross_validation"]["folds"] == 5
     assert len(predictions) == 86
@@ -56,6 +56,12 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert (tmp_path / "robustness_summary.csv").stat().st_size > 0
     assert (tmp_path / "robustness_diagnostics.json").stat().st_size > 0
     assert (tmp_path / "robustness.png").stat().st_size > 0
+    assert (tmp_path / "class_imbalance_folds.csv").stat().st_size > 0
+    assert (tmp_path / "class_imbalance_summary.csv").stat().st_size > 0
+    assert (
+        tmp_path / "class_imbalance_diagnostics.json"
+    ).stat().st_size > 0
+    assert (tmp_path / "class_imbalance.png").stat().st_size > 0
     output = capsys.readouterr().out
     assert "Dummy accuracy:" in output
     assert "Logistic regression macro F1:" in output
@@ -68,6 +74,8 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert "knn CV log loss, sigmoid calibrated:" in output
     assert "macro F1 at 50% injected missingness:" in output
     assert "macro F1 at 1.0x feature noise:" in output
+    assert "macro F1 at 25% Chinstrap retention:" in output
+    assert "Chinstrap recall at 25% retention:" in output
 
 
 def test_cli_reports_invalid_test_size(tmp_path: Path, capsys) -> None:
@@ -91,4 +99,4 @@ def test_cli_version(capsys) -> None:
         main(["--version"])
 
     assert exc_info.value.code == 0
-    assert capsys.readouterr().out == "0.6.0\n"
+    assert capsys.readouterr().out == "0.7.0\n"

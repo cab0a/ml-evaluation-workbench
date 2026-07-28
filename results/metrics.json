@@ -1,6 +1,6 @@
 {
-  "report_version": 6,
-  "project_version": "0.6.0",
+  "report_version": 7,
+  "project_version": "0.7.0",
   "dataset": {
     "source": "data/penguins.csv",
     "sha256": "f204db2c753b0937caac3cb35258562c14f073e4bbc76be24b4c51ce22767a93",
@@ -1494,5 +1494,444 @@
       }
     },
     "interpretation": "controlled_sensitivity_evidence_not_deployment_robustness"
+  },
+  "class_imbalance": {
+    "strategy": "shared_outer_fold_training_class_downsampling",
+    "outer_folds": 5,
+    "target_class": "Chinstrap",
+    "target_class_selection": "globally_least_frequent_class_ties_broken_lexicographically",
+    "global_class_counts": {
+      "Adelie": 152,
+      "Chinstrap": 68,
+      "Gentoo": 124
+    },
+    "retention_fractions": [
+      1.0,
+      0.75,
+      0.5,
+      0.25
+    ],
+    "sampling": "without_replacement_nearest_integer_minimum_one_target_row",
+    "seed_rule": {
+      "description": "random_state_plus_30000_plus_fold_times_100_plus_condition_index",
+      "shared_across_models": true
+    },
+    "training_data": "target_class_rows_only_downsampled_features_and_labels_paired",
+    "validation_data": "unchanged",
+    "validation_labels": "unchanged",
+    "summary": {
+      "standard_deviation": "population_across_folds",
+      "conditions": {
+        "1": {
+          "logistic_regression": {
+            "accuracy": {
+              "mean": 0.9448,
+              "std": 0.03351,
+              "min": 0.884058,
+              "max": 0.985507,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.923659,
+              "std": 0.043207,
+              "min": 0.858095,
+              "max": 0.986111,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            "macro_f1": {
+              "mean": 0.928288,
+              "std": 0.041342,
+              "min": 0.856905,
+              "max": 0.981414,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.821978,
+              "std": 0.111288,
+              "min": 0.692308,
+              "max": 1.0,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            }
+          },
+          "knn": {
+            "accuracy": {
+              "mean": 0.959292,
+              "std": 0.010882,
+              "min": 0.942029,
+              "max": 0.971014,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.947829,
+              "std": 0.022578,
+              "min": 0.909744,
+              "max": 0.975358,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            "macro_f1": {
+              "mean": 0.949112,
+              "std": 0.017756,
+              "min": 0.920694,
+              "max": 0.970661,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.895604,
+              "std": 0.077704,
+              "min": 0.769231,
+              "max": 1.0,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.0,
+                "min": 0.0,
+                "max": 0.0
+              }
+            }
+          }
+        },
+        "0.75": {
+          "logistic_regression": {
+            "accuracy": {
+              "mean": 0.947698,
+              "std": 0.032503,
+              "min": 0.884058,
+              "max": 0.971014,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.002898,
+                "std": 0.010845,
+                "min": -0.014493,
+                "max": 0.014493
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.926248,
+              "std": 0.036664,
+              "min": 0.858095,
+              "max": 0.962302,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.002589,
+                "std": 0.016213,
+                "min": -0.023809,
+                "max": 0.025641
+              }
+            },
+            "macro_f1": {
+              "mean": 0.934123,
+              "std": 0.040493,
+              "min": 0.856905,
+              "max": 0.970145,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.005836,
+                "std": 0.01261,
+                "min": -0.011269,
+                "max": 0.023412
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.823077,
+              "std": 0.074239,
+              "min": 0.714286,
+              "max": 0.928571,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.001099,
+                "std": 0.046932,
+                "min": -0.071429,
+                "max": 0.076923
+              }
+            }
+          },
+          "knn": {
+            "accuracy": {
+              "mean": 0.956394,
+              "std": 0.015878,
+              "min": 0.942029,
+              "max": 0.985507,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.002898,
+                "std": 0.0142,
+                "min": -0.028985,
+                "max": 0.014493
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.940455,
+              "std": 0.026868,
+              "min": 0.909744,
+              "max": 0.986111,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.007373,
+                "std": 0.020549,
+                "min": -0.047619,
+                "max": 0.010753
+              }
+            },
+            "macro_f1": {
+              "mean": 0.944645,
+              "std": 0.023596,
+              "min": 0.920694,
+              "max": 0.987617,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.004467,
+                "std": 0.018609,
+                "min": -0.03929,
+                "max": 0.016956
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.867033,
+              "std": 0.086136,
+              "min": 0.769231,
+              "max": 1.0,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.028571,
+                "std": 0.057143,
+                "min": -0.142857,
+                "max": 0.0
+              }
+            }
+          }
+        },
+        "0.5": {
+          "logistic_regression": {
+            "accuracy": {
+              "mean": 0.9448,
+              "std": 0.010711,
+              "min": 0.927536,
+              "max": 0.956522,
+              "paired_difference_vs_full_retention": {
+                "mean": 0.0,
+                "std": 0.027498,
+                "min": -0.043478,
+                "max": 0.043478
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.913945,
+              "std": 0.016484,
+              "min": 0.893651,
+              "max": 0.935385,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.009714,
+                "std": 0.034801,
+                "min": -0.071428,
+                "max": 0.035556
+              }
+            },
+            "macro_f1": {
+              "mean": 0.928146,
+              "std": 0.016362,
+              "min": 0.904119,
+              "max": 0.94715,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.000142,
+                "std": 0.031653,
+                "min": -0.052239,
+                "max": 0.047214
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.764835,
+              "std": 0.055317,
+              "min": 0.692308,
+              "max": 0.846154,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.057143,
+                "std": 0.083299,
+                "min": -0.214286,
+                "max": 0.0
+              }
+            }
+          },
+          "knn": {
+            "accuracy": {
+              "mean": 0.953495,
+              "std": 0.016881,
+              "min": 0.942029,
+              "max": 0.985507,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.005797,
+                "std": 0.01478,
+                "min": -0.028985,
+                "max": 0.014493
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.933154,
+              "std": 0.030385,
+              "min": 0.904762,
+              "max": 0.986111,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.014675,
+                "std": 0.025471,
+                "min": -0.060317,
+                "max": 0.010753
+              }
+            },
+            "macro_f1": {
+              "mean": 0.940924,
+              "std": 0.025427,
+              "min": 0.920694,
+              "max": 0.987617,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.008188,
+                "std": 0.021317,
+                "min": -0.043044,
+                "max": 0.016956
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.838462,
+              "std": 0.106065,
+              "min": 0.714286,
+              "max": 1.0,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.057143,
+                "std": 0.083299,
+                "min": -0.214285,
+                "max": 0.0
+              }
+            }
+          }
+        },
+        "0.25": {
+          "logistic_regression": {
+            "accuracy": {
+              "mean": 0.91867,
+              "std": 0.014514,
+              "min": 0.898551,
+              "max": 0.941176,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.02613,
+                "std": 0.04239,
+                "min": -0.086956,
+                "max": 0.043478
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.867449,
+              "std": 0.024965,
+              "min": 0.843254,
+              "max": 0.909744,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.05621,
+                "std": 0.055673,
+                "min": -0.142857,
+                "max": 0.022857
+              }
+            },
+            "macro_f1": {
+              "mean": 0.885055,
+              "std": 0.024406,
+              "min": 0.861027,
+              "max": 0.926161,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.043233,
+                "std": 0.054686,
+                "min": -0.120387,
+                "max": 0.041938
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.618682,
+              "std": 0.082644,
+              "min": 0.538462,
+              "max": 0.769231,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.203297,
+                "std": 0.136635,
+                "min": -0.428571,
+                "max": -0.071429
+              }
+            }
+          },
+          "knn": {
+            "accuracy": {
+              "mean": 0.941944,
+              "std": 0.015721,
+              "min": 0.927536,
+              "max": 0.970588,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.017349,
+                "std": 0.023247,
+                "min": -0.043478,
+                "max": 0.014706
+              }
+            },
+            "balanced_accuracy": {
+              "mean": 0.90701,
+              "std": 0.028121,
+              "min": 0.880952,
+              "max": 0.961026,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.040819,
+                "std": 0.038849,
+                "min": -0.084485,
+                "max": 0.013334
+              }
+            },
+            "macro_f1": {
+              "mean": 0.922453,
+              "std": 0.024032,
+              "min": 0.898843,
+              "max": 0.967869,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.026659,
+                "std": 0.03494,
+                "min": -0.066236,
+                "max": 0.025314
+              }
+            },
+            "target_class_recall": {
+              "mean": 0.737363,
+              "std": 0.096453,
+              "min": 0.642857,
+              "max": 0.923077,
+              "paired_difference_vs_full_retention": {
+                "mean": -0.158242,
+                "std": 0.11348,
+                "min": -0.285714,
+                "max": 0.0
+              }
+            }
+          }
+        }
+      }
+    },
+    "interpretation": "controlled_training_prevalence_sensitivity_not_deployment_prevalence_or_cost_analysis"
   }
 }

@@ -8,9 +8,10 @@ regression、5-nearest neighborsを比較するML評価プロジェクトです�
 
 fold-level metrics、row-level predictions、feature ablation、split integrity、
 shuffled-label negative controlに加え、probability calibration、validation-onlyの
-missing-value injection、Gaussian feature noiseによる感度評価を含みます。前処理は
-各training partition内でfitされ、数値成果物はSHA-256で検証できます。結果の適用範囲と
-制約の詳細は英語本文を参照してください。
+missing-value injectionとGaussian feature noise、training-class
+downsamplingによる感度評価を含みます。前処理は各training partition内でfitされ、
+24個の成果物はSHA-256で検証できます。結果の適用範囲と制約の詳細は英語本文を参照して
+ください。
 
 ---
 
@@ -25,10 +26,10 @@ ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
 
 **Question → Controlled Comparison → Diagnostics → Interpretation**
 
-Version 0.6.0 adds controlled sensitivity experiments for injected missing
-values and Gaussian feature noise. Validation features are perturbed on the
-same outer folds while training data, labels, model settings, and preprocessing
-policy remain fixed.
+Version 0.7.0 adds a controlled class-imbalance experiment. Rows from the
+globally least frequent class are retained at four fixed levels inside each
+outer training fold, while validation data, folds, features, model settings,
+and preprocessing policy remain fixed.
 
 The repository emphasizes evaluation design and reproducibility rather than
 model complexity or leaderboard performance.
@@ -41,17 +42,18 @@ ablation, negative controls, and row-level errors.
 
 ## Representative Result
 
-The same five stratified folds are used to compare each selected feature set.
-Both substantive models lose at least 0.284 mean macro F1 when either bill
-measurement is removed from the shared two-feature reference.
+Reducing retained Chinstrap training rows from 100% to 25% lowers their mean
+training share from 19.8% to 6.0%. Mean Chinstrap recall falls from 0.822 to
+0.619 for logistic regression and from 0.896 to 0.737 for KNN.
 
-![Feature-ablation macro F1](results/feature_ablation_scores.png)
+![Class-imbalance sensitivity](results/class_imbalance.png)
 
-The per-fold values and paired differences are available in
-[`feature_ablation_folds.csv`](results/feature_ablation_folds.csv) and
-[`feature_ablation_summary.csv`](results/feature_ablation_summary.csv). This
-supports a bounded complementary-signal claim for the fixed dataset, models,
-and folds—not a causal feature-importance claim.
+The per-fold samples, class counts, scores, and paired differences are
+available in
+[`class_imbalance_folds.csv`](results/class_imbalance_folds.csv) and
+[`class_imbalance_summary.csv`](results/class_imbalance_summary.csv). The
+result demonstrates sensitivity to one controlled training-prevalence change,
+not expected performance under a real deployment population.
 
 ## Problem
 
@@ -90,6 +92,9 @@ This project keeps those decisions explicit:
 - Validation-only missing-value injection at four fixed rates
 - Gaussian feature noise scaled from each outer training fold
 - Fold-level perturbation accounting and robustness summaries
+- Deterministic downsampling of the least frequent training class
+- Shared class-retention samples at 100%, 75%, 50%, and 25%
+- Target-class recall, class-count evidence, and paired sensitivity summaries
 - Accuracy, balanced accuracy, macro F1, and per-class recall
 - Cross-validation mean, population standard deviation, minimum, and maximum
 - Row-level holdout predictions with source-row references
@@ -122,9 +127,9 @@ ml-evaluation-workbench evaluate data/penguins.csv \
   --output-dir output/quickstart
 ```
 
-The evaluation writes twenty artifacts under `output/quickstart/`. Start with
-`model_comparison.csv` for a compact model-level view,
-`feature_ablation_scores.png` for the representative comparison, and
+The evaluation writes twenty-four artifacts under `output/quickstart/`.
+Start with `model_comparison.csv` for a compact model-level view,
+`class_imbalance.png` for the representative sensitivity result, and
 `predictions.csv` for row-level error inspection. Checksum-fixed reference
 copies are committed under `results/`.
 
@@ -138,7 +143,7 @@ ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
                                          [--calibration-folds INTEGER]
 ```
 
-The documented v0.6 command is:
+The documented v0.7 command is:
 
 ```bash
 ml-evaluation-workbench evaluate data/penguins.csv \
@@ -172,10 +177,14 @@ logistic_regression CV log loss, uncalibrated: 0.139
 logistic_regression CV log loss, sigmoid calibrated: 0.236
 logistic_regression macro F1 at 50% injected missingness: 0.624
 logistic_regression macro F1 at 1.0x feature noise: 0.692
+logistic_regression macro F1 at 25% Chinstrap retention: 0.885
+logistic_regression Chinstrap recall at 25% retention: 0.619
 knn CV log loss, uncalibrated: 0.280
 knn CV log loss, sigmoid calibrated: 0.133
 knn macro F1 at 50% injected missingness: 0.625
 knn macro F1 at 1.0x feature noise: 0.673
+knn macro F1 at 25% Chinstrap retention: 0.922
+knn Chinstrap recall at 25% retention: 0.737
 Metrics: results/metrics.json
 Predictions: results/predictions.csv
 Confusion matrix: results/confusion_matrix.png
@@ -196,6 +205,10 @@ Robustness folds: results/robustness_folds.csv
 Robustness summary: results/robustness_summary.csv
 Robustness diagnostics: results/robustness_diagnostics.json
 Robustness plot: results/robustness.png
+Class-imbalance folds: results/class_imbalance_folds.csv
+Class-imbalance summary: results/class_imbalance_summary.csv
+Class-imbalance diagnostics: results/class_imbalance_diagnostics.json
+Class-imbalance plot: results/class_imbalance.png
 ```
 
 ## Technical Design
@@ -212,7 +225,7 @@ columns. The data are available under CC0 1.0.
 
 Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
 sex, body mass, flipper length, and observation year are intentionally excluded
-from v0.6. This keeps the question interpretable and avoids relying on
+from v0.7. This keeps the question interpretable and avoids relying on
 location-specific correlations that can make a random holdout unnecessarily
 easy.
 
@@ -247,7 +260,13 @@ easy.
 16. Add zero-mean Gaussian noise to observed validation cells at 0, 0.25,
     0.5, and 1.0 times each outer training fold's feature standard deviation.
 17. Compare every perturbed score with the unperturbed score on the same fold.
-18. Save aggregate metrics, fold-level evidence, diagnostic summaries,
+18. Within each outer training fold, retain 100%, 75%, 50%, or 25% of the
+    globally least frequent class using deterministic samples shared by both
+    substantive models.
+19. Keep every validation partition unchanged, and record retained source-row
+    hashes, class counts, target-class recall, and paired differences from full
+    retention.
+20. Save aggregate metrics, fold-level evidence, diagnostic summaries,
     predictions, and evaluation figures.
 
 The preprocessing steps are part of each scikit-learn `Pipeline`, so their
@@ -277,6 +296,8 @@ partition.
   paired fold-level differences
 - robustness protocol, perturbation definitions, seed rules, cell accounting,
   condition summaries, and paired differences from unperturbed scores
+- class-imbalance target selection, retention levels, sampling policy,
+  condition summaries, and paired differences from full retention
 
 `predictions.csv` contains:
 
@@ -318,9 +339,17 @@ paired mean differences from the unperturbed condition.
 `robustness_diagnostics.json` fixes the perturbation protocol and
 interpretation boundary. `robustness.png` visualizes macro-F1 sensitivity.
 
+`class_imbalance_folds.csv` records one row per retention level, fold, and
+model, including the deterministic seed, retained-row signature, before/after
+class counts, aggregate metrics, and per-class recall.
+`class_imbalance_summary.csv` provides fold summaries and paired mean
+differences from full retention. `class_imbalance_diagnostics.json` fixes the
+target-class selection and sampling rules. `class_imbalance.png` visualizes
+macro F1 and Chinstrap-recall sensitivity.
+
 `confusion_matrix.png` visualizes the logistic-regression holdout errors.
 `cross_validation_scores.png` shows all three models' aggregate scores in
-each fold. `checksums.sha256` fixes the bytes of all twenty reference
+each fold. `checksums.sha256` fixes the bytes of all twenty-four reference
 artifacts.
 
 ## Results
@@ -422,12 +451,33 @@ performance under a real acquisition failure or production drift.
 
 ![Missing-value and noise robustness](results/robustness.png)
 
+### Class-Imbalance Sensitivity
+
+Chinstrap is the least frequent class in the fixed dataset, with 68 of 344
+rows. The experiment downsamples only its rows inside each outer training
+fold. All validation rows and labels remain unchanged.
+
+| Chinstrap Retention | Mean Training Share | Logistic Macro F1 | Logistic Recall | KNN Macro F1 | KNN Recall |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 100% | 19.8% | 0.928 | 0.822 | 0.949 | 0.896 |
+| 75% | 15.5% | 0.934 | 0.823 | 0.945 | 0.867 |
+| 50% | 11.0% | 0.928 | 0.765 | 0.941 | 0.838 |
+| 25% | 6.0% | 0.885 | 0.619 | 0.922 | 0.737 |
+
+At 25% retention, logistic regression loses 0.043 mean macro F1 and 0.203
+mean Chinstrap recall relative to full retention. KNN loses 0.027 macro F1 and
+0.158 Chinstrap recall. The 75% logistic-regression result is slightly above
+its full-retention mean, so the observed response is not strictly monotonic at
+every level.
+
+![Class-imbalance sensitivity](results/class_imbalance.png)
+
 See [results/README.md](results/README.md) for interpretation and the boundary
 between this controlled result and a general performance claim.
 
 ## Limitations
 
-- Version 0.6.0 evaluates one small dataset with one deterministic holdout and
+- Version 0.7.0 evaluates one small dataset with one deterministic holdout and
   one five-fold stratified cross-validation run.
 - A random row split does not measure transfer across islands, years, field
   conditions, or independent collection programs.
@@ -457,8 +507,17 @@ between this controlled result and a general performance claim.
   does not represent a measured missingness mechanism.
 - Gaussian perturbations are independent, zero mean, and scaled from training
   folds. They do not model bias, outliers, correlated sensor noise, or drift.
-- Training-time corruption, structured missingness, label noise, and combined
-  perturbations are outside the v0.6 scope.
+- Structured missingness, label noise, combined perturbations, and changes to
+  non-target training classes are outside the v0.7 scope.
+- The class-imbalance experiment downsamples only Chinstrap, selected because
+  it is globally least frequent in this dataset. It does not evaluate other
+  target classes, oversampling, class weighting, threshold changes, or
+  mitigation strategies.
+- Downsampling changes both class prevalence and training-set size. The
+  experiment does not isolate those two effects or model population-prior
+  shift in validation data.
+- Class-retention samples use one deterministic seed per fold and condition.
+  Alternative retained rows can produce different sensitivity curves.
 - The five fold scores are correlated because their training partitions
   overlap. Their standard deviation is descriptive and is not a confidence
   interval.
@@ -499,15 +558,16 @@ python -m pytest
 ```
 
 Tests cover dataset validation, holdout and cross-validation behavior,
-feature-ablation accounting, leakage diagnostics, report schemas, CLI
-arguments and errors, deterministic outputs, and checksum verification.
+feature-ablation accounting, leakage diagnostics, robustness and
+class-imbalance protocols, report schemas, CLI arguments and errors,
+deterministic outputs, and checksum verification.
 GitHub Actions checks the installed CLI and dataset, runs the tests and a
 controlled evaluation on Python 3.10 through 3.14, and independently requires
 a Python 3.12 regeneration to match committed `results/`.
 
 ## Compatibility
 
-Python 3.10 through 3.14 are exercised in CI. Version 0.6.0 is an alpha
+Python 3.10 through 3.14 are exercised in CI. Version 0.7.0 is an alpha
 evaluation project, so consumers should treat the documented command,
 `metrics.json` report version, and CSV columns as versioned interfaces rather
 than as a 1.x stability guarantee. Release changes are recorded in
@@ -527,6 +587,10 @@ ml-evaluation-workbench/
 ├── results/
 │   ├── README.md
 │   ├── checksums.sha256
+│   ├── class_imbalance.png
+│   ├── class_imbalance_diagnostics.json
+│   ├── class_imbalance_folds.csv
+│   ├── class_imbalance_summary.csv
 │   ├── confusion_matrix.png
 │   ├── cross_validation_folds.csv
 │   ├── cross_validation_scores.png
@@ -569,8 +633,8 @@ ml-evaluation-workbench/
 - **v0.3:** Controlled model comparison
 - **v0.4:** Feature ablation and leakage diagnostics
 - **v0.5:** Probability calibration
-- **v0.6 (current):** Missing-value and noise robustness
-- **v0.7:** Class-imbalance sensitivity
+- **v0.6:** Missing-value and noise robustness
+- **v0.7 (current):** Class-imbalance sensitivity
 - **v0.8:** Cross-experiment summaries and interface review
 - **v0.9:** Documentation and reproducibility review
 - **v1.0:** Stable portfolio release

@@ -1,10 +1,10 @@
-# Version 0.6 Evaluation Result
+# Version 0.7 Evaluation Result
 
 ## Question
 
-How sensitive are the fixed logistic-regression and KNN classifiers to
-controlled missing-value injection and Gaussian feature noise under shared
-outer folds?
+How sensitive are the fixed logistic-regression and KNN classifiers when the
+least frequent class is progressively downsampled in otherwise shared outer
+training folds?
 
 ## Controlled Setup
 
@@ -31,14 +31,19 @@ outer folds?
   fold's population standard deviation per feature
 - Perturbation scope: validation features only; training data and validation
   labels remain unchanged
+- Class-imbalance target: Chinstrap, the globally least frequent class
+- Training-class retention: 100%, 75%, 50%, and 25%, sampled without
+  replacement inside each outer training fold
+- Class-imbalance scope: target-class training rows only; validation data and
+  labels remain unchanged
 - Random state: 42; label-shuffle seed is 42 plus the one-based fold number
 
 The majority-class dummy remains in the primary comparison but is excluded
 from feature ablation because it does not use input features.
 
-The v0.4 feature-ablation and leakage evidence and the v0.5 calibration
-evidence are retained as context. The v0.6 comparison does not tune the models
-or select perturbation levels from the reported scores.
+The v0.4 feature-ablation and leakage evidence, v0.5 calibration evidence, and
+v0.6 perturbation evidence are retained as context. The v0.7 comparison does
+not tune the models or select retention levels from the reported scores.
 
 ## Primary Comparison Reference
 
@@ -178,12 +183,48 @@ means, fold standard deviations, and paired differences from the unperturbed
 condition. `robustness_diagnostics.json` fixes the protocol and interpretation
 boundary.
 
+## Class-Imbalance Sensitivity
+
+Chinstrap is the globally least frequent class, with 68 of 344 rows. For each
+retention level and outer fold, the experiment samples Chinstrap training rows
+without replacement and retains every Adelie and Gentoo training row. The
+same retained-row sample is used for both models. Validation features, labels,
+and class counts do not change.
+
+| Chinstrap Retention | Mean Training Share | Model | Macro F1 | Chinstrap Recall |
+| ---: | ---: | --- | ---: | ---: |
+| 100% | 0.197673 | Logistic regression | 0.928288 ± 0.041342 | 0.821978 ± 0.111288 |
+| 100% | 0.197673 | 5-nearest neighbors | 0.949112 ± 0.017756 | 0.895604 ± 0.077704 |
+| 75% | 0.154670 | Logistic regression | 0.934123 ± 0.040493 | 0.823077 ± 0.074239 |
+| 75% | 0.154670 | 5-nearest neighbors | 0.944645 ± 0.023596 | 0.867033 ± 0.086136 |
+| 50% | 0.110393 | Logistic regression | 0.928146 ± 0.016362 | 0.764835 ± 0.055317 |
+| 50% | 0.110393 | 5-nearest neighbors | 0.940924 ± 0.025427 | 0.838462 ± 0.106065 |
+| 25% | 0.059625 | Logistic regression | 0.885055 ± 0.024406 | 0.618682 ± 0.082644 |
+| 25% | 0.059625 | 5-nearest neighbors | 0.922453 ± 0.024032 | 0.737363 ± 0.096453 |
+
+At 25% retention, the paired mean macro-F1 difference from full retention is
+-0.043233 for logistic regression and -0.026659 for KNN. The paired mean
+Chinstrap-recall differences are -0.203297 and -0.158242, respectively.
+Logistic regression is slightly above its full-retention macro F1 at 75%
+retention, so this deterministic four-condition curve is not strictly
+monotonic.
+
+![Class-imbalance sensitivity](class_imbalance.png)
+
+`class_imbalance_folds.csv` records the resampling seed, original and retained
+target counts, before/after target shares, post-sampling class counts,
+retained-row SHA-256, aggregate metrics, and per-class recall.
+`class_imbalance_summary.csv` records means, population standard deviations,
+and paired differences from full retention.
+`class_imbalance_diagnostics.json` fixes target selection, sampling, seed, and
+interpretation rules.
+
 ## Continuity Artifacts
 
 The deterministic holdout, three-model comparison, fold-level scores,
 row-level predictions, and logistic-regression confusion matrix from v0.3 are
 retained alongside the v0.4 diagnostics and v0.5 calibration evidence, then
-regenerated under report schema version 6.
+regenerated under report schema version 7.
 
 ![Cross-validation fold scores](cross_validation_scores.png)
 
@@ -191,11 +232,11 @@ regenerated under report schema version 6.
 
 ## Interpretation Boundary
 
-Version 0.6 adds controlled sensitivity evidence, not a deployment-robustness
-guarantee. The robustness and calibration comparisons, ablation, and negative
-control reuse one five-fold outer partition and one public dataset revision.
-Their standard deviations describe observed fold variation and are not
-confidence intervals.
+Version 0.7 adds controlled training-prevalence sensitivity evidence, not a
+deployment-performance guarantee. The class-imbalance, robustness, and
+calibration comparisons, ablation, and negative control reuse one five-fold
+outer partition and one public dataset revision. Their standard deviations
+describe observed fold variation and are not confidence intervals.
 
 The reliability diagram uses top-label confidence rather than classwise
 calibration and depends on ten fixed bins. Empty or sparsely populated bins
@@ -210,11 +251,18 @@ independent across cells. Other patterns—including structured missingness,
 bias, outliers, correlated noise, label noise, and train-time corruption—can
 produce materially different results.
 
+The class-imbalance experiment targets only Chinstrap and reduces both its
+prevalence and the total number of training rows. It does not isolate sample
+size from prevalence, alter validation prevalence, estimate decision costs,
+or test mitigation through class weights, resampling, threshold adjustment,
+or additional data. One deterministic sample is used per fold and retention
+level; other retained rows may produce different curves.
+
 The committed artifacts demonstrate a deterministic implementation of feature
 ablation, split-integrity checks, a negative control, cross-fitted probability
-diagnostics, and synthetic robustness experiments. They are not a benchmark
-claim, causal feature-importance result, deployment guarantee, or ecological
-conclusion.
+diagnostics, synthetic robustness experiments, and controlled class
+downsampling. They are not a benchmark claim, causal feature-importance
+result, deployment guarantee, prevalence forecast, or ecological conclusion.
 
 ## Reproduction
 

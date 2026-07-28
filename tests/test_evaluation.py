@@ -41,6 +41,16 @@ def test_evaluation_is_deterministic(penguins_frame) -> None:
     assert first.robustness_folds.equals(second.robustness_folds)
     assert first.robustness_summary.equals(second.robustness_summary)
     assert first.robustness_diagnostics == second.robustness_diagnostics
+    assert first.class_imbalance_folds.equals(
+        second.class_imbalance_folds
+    )
+    assert first.class_imbalance_summary.equals(
+        second.class_imbalance_summary
+    )
+    assert (
+        first.class_imbalance_diagnostics
+        == second.class_imbalance_diagnostics
+    )
     assert np.array_equal(first.confusion, second.confusion)
 
 
@@ -455,6 +465,113 @@ def test_robustness_records_cell_accounting_and_summaries(
         ]
         assert row.macro_f1_mean == round(
             float(fold_rows["macro_f1"].mean()),
+            6,
+        )
+
+
+def test_class_imbalance_uses_shared_training_samples_and_validation_folds(
+    evaluation_result,
+) -> None:
+    result = evaluation_result
+    folds = result.class_imbalance_folds
+    diagnostics = result.class_imbalance_diagnostics
+
+    assert diagnostics["strategy"] == (
+        "shared_outer_fold_training_class_downsampling"
+    )
+    assert diagnostics["target_class"] == "Chinstrap"
+    assert diagnostics["global_class_counts"] == {
+        "Adelie": 152,
+        "Chinstrap": 68,
+        "Gentoo": 124,
+    }
+    assert diagnostics["validation_data"] == "unchanged"
+    assert diagnostics["validation_labels"] == "unchanged"
+    assert diagnostics["seed_rule"]["shared_across_models"] is True
+    assert len(folds) == 40
+    assert set(folds["retention_fraction"]) == {1.0, 0.75, 0.5, 0.25}
+
+    shared_columns = (
+        "resampling_seed",
+        "retained_target_rows",
+        "retained_target_source_rows_sha256",
+    )
+    for column in shared_columns:
+        unique_counts = folds.groupby(
+            ["retention_fraction", "fold"]
+        )[column].nunique()
+        assert int(unique_counts.max()) == 1
+
+    for model_name in ("logistic_regression", "knn"):
+        primary = (
+            result.cross_validation_folds[
+                result.cross_validation_folds["model"] == model_name
+            ]
+            .sort_values("fold")
+            .reset_index(drop=True)
+        )
+        full_retention = (
+            folds[
+                (folds["model"] == model_name)
+                & (folds["retention_fraction"] == 1.0)
+            ]
+            .sort_values("fold")
+            .reset_index(drop=True)
+        )
+        for score_name in (
+            "accuracy",
+            "balanced_accuracy",
+            "macro_f1",
+        ):
+            assert np.allclose(
+                full_retention[score_name],
+                primary[score_name],
+            )
+
+
+def test_class_imbalance_records_counts_recall_and_summaries(
+    evaluation_result,
+) -> None:
+    result = evaluation_result
+    folds = result.class_imbalance_folds
+    summary = result.class_imbalance_summary
+
+    assert len(summary) == 8
+    one_model = folds[folds["model"] == "logistic_regression"]
+    full_retention = one_model[
+        one_model["retention_fraction"] == 1.0
+    ].set_index("fold")
+    quarter_retention = one_model[
+        one_model["retention_fraction"] == 0.25
+    ].set_index("fold")
+    assert (
+        quarter_retention["retained_target_rows"]
+        < full_retention["retained_target_rows"]
+    ).all()
+    assert (
+        quarter_retention["target_share_after"]
+        < full_retention["target_share_after"]
+    ).all()
+    assert (
+        quarter_retention["train_rows_adelie"]
+        == full_retention["train_rows_adelie"]
+    ).all()
+    assert (
+        quarter_retention["train_rows_gentoo"]
+        == full_retention["train_rows_gentoo"]
+    ).all()
+
+    for row in summary.itertuples(index=False):
+        fold_rows = folds[
+            (folds["retention_fraction"] == row.retention_fraction)
+            & (folds["model"] == row.model)
+        ]
+        assert row.macro_f1_mean == round(
+            float(fold_rows["macro_f1"].mean()),
+            6,
+        )
+        assert row.target_class_recall_mean == round(
+            float(fold_rows["recall_chinstrap"].mean()),
             6,
         )
 

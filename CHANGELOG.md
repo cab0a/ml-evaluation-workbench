@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.7.0] - 2026-07-28
+
+### Added
+
+- Controlled downsampling of the globally least frequent class at 100%, 75%,
+  50%, and 25% retention inside each outer training fold
+- Deterministic retained-row samples shared by logistic regression and fixed
+  KNN while validation data and labels remain unchanged
+- Fold-level seeds, retained-row signatures, before/after class shares,
+  post-sampling class counts, aggregate metrics, and per-class recall
+- Class-imbalance summary, diagnostics, and sensitivity figure covering macro
+  F1 and target-class recall
+
+### Changed
+
+- Evaluation report schema updated to version 7
+- Reproduction manifest expanded to twenty-four reference artifacts
+- Documentation expanded with training-prevalence sensitivity results,
+  non-monotonic observations, and mitigation and deployment boundaries
+
 ## [0.6.0] - 2026-07-27
 
 ### Added

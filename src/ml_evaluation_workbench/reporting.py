@@ -449,3 +449,97 @@ def write_robustness_scores(
     finally:
         plt.close(figure)
     return destination
+
+
+def write_class_imbalance_scores(
+    path: str | Path,
+    summary: pd.DataFrame,
+) -> Path:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary: Path | None = None
+    model_styles = {
+        "logistic_regression": ("Logistic regression", "#2563eb"),
+        "knn": ("5-nearest neighbors", "#059669"),
+    }
+    target_class = str(summary["target_class"].iloc[0])
+    panels = (
+        (
+            "Macro F1",
+            "macro_f1_mean",
+            "macro_f1_std",
+            "Macro F1, mean ± fold standard deviation",
+        ),
+        (
+            f"{target_class} Recall",
+            "target_class_recall_mean",
+            "target_class_recall_std",
+            f"{target_class} recall, mean ± fold standard deviation",
+        ),
+    )
+    figure, axes = plt.subplots(
+        1,
+        len(panels),
+        figsize=(10.0, 4.5),
+        dpi=120,
+        sharey=True,
+    )
+    try:
+        for axis, (
+            title,
+            mean_column,
+            standard_deviation_column,
+            y_label,
+        ) in zip(axes, panels, strict=True):
+            for model_name, (label, color) in model_styles.items():
+                model_rows = (
+                    summary[summary["model"] == model_name]
+                    .sort_values("retention_fraction")
+                    .reset_index(drop=True)
+                )
+                retention_percent = (
+                    model_rows["retention_fraction"].to_numpy() * 100
+                )
+                axis.errorbar(
+                    retention_percent,
+                    model_rows[mean_column],
+                    yerr=model_rows[standard_deviation_column],
+                    marker="o",
+                    capsize=4,
+                    linewidth=1.5,
+                    color=color,
+                    label=label,
+                )
+            axis.set_title(title)
+            axis.set_xlabel(f"Retained {target_class} training rows")
+            axis.set_xticks([25, 50, 75, 100])
+            axis.set_xticklabels(["25%", "50%", "75%", "100%"])
+            axis.set_ylabel(y_label)
+            axis.set_ylim(0.0, 1.02)
+            axis.grid(axis="y", alpha=0.25)
+        axes[1].legend(loc="lower right", fontsize=8)
+        figure.suptitle(
+            "Training-Class Retention Sensitivity under Shared Outer Folds"
+        )
+        figure.tight_layout()
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=destination.parent,
+            prefix=f".{destination.name}.",
+            suffix=".png",
+            delete=False,
+        ) as handle:
+            temporary = Path(handle.name)
+        figure.savefig(
+            temporary,
+            format="png",
+            metadata={"Software": "ml-evaluation-workbench"},
+        )
+        os.replace(temporary, destination)
+    except Exception:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+        raise
+    finally:
+        plt.close(figure)
+    return destination

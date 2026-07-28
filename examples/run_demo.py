@@ -1,4 +1,4 @@
-"""Regenerate or verify the committed v0.6 evaluation artifacts."""
+"""Regenerate or verify the committed v0.7 evaluation artifacts."""
 
 from __future__ import annotations
 
@@ -14,6 +14,10 @@ from ml_evaluation_workbench.cli import main as workbench_main
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_NAMES = (
+    "class_imbalance.png",
+    "class_imbalance_diagnostics.json",
+    "class_imbalance_folds.csv",
+    "class_imbalance_summary.csv",
     "confusion_matrix.png",
     "cross_validation_folds.csv",
     "cross_validation_scores.png",
@@ -239,6 +243,50 @@ def main() -> int:
                     "Highest robustness severity did not reduce macro F1 for "
                     f"{model_name}/{perturbation}"
                 )
+    class_imbalance = metrics["class_imbalance"]
+    if class_imbalance["strategy"] != (
+        "shared_outer_fold_training_class_downsampling"
+    ):
+        raise SystemExit("Unexpected class-imbalance evaluation strategy")
+    if class_imbalance["target_class"] != "Chinstrap":
+        raise SystemExit(
+            "Unexpected class-imbalance target: "
+            f"{class_imbalance['target_class']}"
+        )
+    if class_imbalance["validation_data"] != "unchanged":
+        raise SystemExit("Class-imbalance evaluation changed validation data")
+    if class_imbalance["validation_labels"] != "unchanged":
+        raise SystemExit(
+            "Class-imbalance evaluation changed validation labels"
+        )
+    for model_name in ("logistic_regression", "knn"):
+        expected = cross_validation["models"][model_name]["macro_f1"]["mean"]
+        full_retention = class_imbalance["summary"]["conditions"]["1"][
+            model_name
+        ]["macro_f1"]["mean"]
+        if full_retention != expected:
+            raise SystemExit(
+                "Class-imbalance baseline mismatch for "
+                f"{model_name}: expected {expected}, got {full_retention}"
+            )
+        quarter_retention = class_imbalance["summary"]["conditions"]["0.25"][
+            model_name
+        ]
+        if quarter_retention["macro_f1"]["mean"] >= full_retention:
+            raise SystemExit(
+                "Quarter target-class retention did not reduce macro F1 for "
+                f"{model_name}"
+            )
+        if (
+            quarter_retention["target_class_recall"]["mean"]
+            >= class_imbalance["summary"]["conditions"]["1"][model_name][
+                "target_class_recall"
+            ]["mean"]
+        ):
+            raise SystemExit(
+                "Quarter target-class retention did not reduce target recall "
+                f"for {model_name}"
+            )
     manifest = _write_manifest(args.output_dir)
     print(f"Checksums: {manifest}")
     return 0

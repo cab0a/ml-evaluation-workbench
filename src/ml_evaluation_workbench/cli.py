@@ -11,6 +11,7 @@ from . import __version__
 from .dataset import load_dataset, sha256_file
 from .evaluation import evaluate_dataset
 from .reporting import (
+    write_class_imbalance_scores,
     write_confusion_matrix,
     write_cross_validation_scores,
     write_csv,
@@ -52,6 +53,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
             "probability_calibration"
         ],
         "robustness": result.metrics["robustness"],
+        "class_imbalance": result.metrics["class_imbalance"],
     }
 
     metrics_path = write_json(output_dir / "metrics.json", result.metrics)
@@ -132,6 +134,22 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         output_dir / "robustness.png",
         result.robustness_summary,
     )
+    class_imbalance_folds_path = write_csv(
+        output_dir / "class_imbalance_folds.csv",
+        result.class_imbalance_folds,
+    )
+    class_imbalance_summary_path = write_csv(
+        output_dir / "class_imbalance_summary.csv",
+        result.class_imbalance_summary,
+    )
+    class_imbalance_diagnostics_path = write_json(
+        output_dir / "class_imbalance_diagnostics.json",
+        result.class_imbalance_diagnostics,
+    )
+    class_imbalance_plot_path = write_class_imbalance_scores(
+        output_dir / "class_imbalance.png",
+        result.class_imbalance_summary,
+    )
 
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
@@ -153,6 +171,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         "models_summary"
     ]
     robustness_summary = result.metrics["robustness"]["summary"]
+    class_imbalance = result.metrics["class_imbalance"]
     print(f"Dataset rows: {result.metrics['dataset']['rows']}")
     print(f"Training rows: {result.metrics['split']['train_rows']}")
     print(f"Test rows: {result.metrics['split']['test_rows']}")
@@ -221,6 +240,19 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
             f"{model_name} macro F1 at 1.0x feature noise: "
             f"{noise_macro_f1:.3f}"
         )
+        retained_quarter = class_imbalance["summary"]["conditions"][
+            "0.25"
+        ][model_name]
+        print(
+            f"{model_name} macro F1 at 25% "
+            f"{class_imbalance['target_class']} retention: "
+            f"{retained_quarter['macro_f1']['mean']:.3f}"
+        )
+        print(
+            f"{model_name} {class_imbalance['target_class']} recall at 25% "
+            "retention: "
+            f"{retained_quarter['target_class_recall']['mean']:.3f}"
+        )
     print(f"Metrics: {metrics_path}")
     print(f"Predictions: {predictions_path}")
     print(f"Confusion matrix: {confusion_path}")
@@ -244,6 +276,13 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     print(f"Robustness summary: {robustness_summary_path}")
     print(f"Robustness diagnostics: {robustness_diagnostics_path}")
     print(f"Robustness plot: {robustness_plot_path}")
+    print(f"Class-imbalance folds: {class_imbalance_folds_path}")
+    print(f"Class-imbalance summary: {class_imbalance_summary_path}")
+    print(
+        "Class-imbalance diagnostics: "
+        f"{class_imbalance_diagnostics_path}"
+    )
+    print(f"Class-imbalance plot: {class_imbalance_plot_path}")
     return 0
 
 
