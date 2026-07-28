@@ -10,109 +10,86 @@ fold-level metrics、row-level predictions、feature ablation、split integrity�
 
 [![CI](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml)
 
-Compare machine-learning baselines through shared splits, leakage-aware
-pipelines, inspectable predictions, and reproducible evaluation artifacts.
+Compare fixed machine-learning baselines through shared splits, leakage-aware
+pipelines, row-level evidence, controlled diagnostics, and reproducible report
+artifacts.
 
 ## Overview
 
-ML Evaluation Workbench demonstrates a small but complete evaluation cycle:
-
-**Question → Controlled Comparison → Diagnostics → Interpretation**
-
-Version 1.0.0 is the stable portfolio release. It preserves the v0.8 numerical
-evaluation and the v0.9 reproducibility workflow while defining the CLI,
-Python API, artifact inventory, CSV column order, and JSON top-level keys as
-backward-compatible 1.x interfaces. Regression tests and a generated
-machine-readable contract guard those surfaces against accidental drift.
-
-The repository emphasizes evaluation design and reproducibility rather than
+ML Evaluation Workbench is a compact tabular-classification evaluation for ML
+engineers and reviewers who want to inspect the decisions behind a model
+comparison. It emphasizes evaluation design and claim boundaries rather than
 model complexity or leaderboard performance.
 
-It is intended for ML engineers and reviewers who want a compact example of
-how to structure a controlled model comparison. Unlike the image-processing
-experiments elsewhere in this portfolio, this repository focuses on tabular
-classification evidence: baselines, split policy, fold variability, feature
-ablation, negative controls, and row-level errors.
+The project uses a checksum-pinned Palmer Penguins dataset and asks:
 
-## Representative Result
+**How do fixed linear and nonlinear classifiers compare with a majority-class
+baseline, and how does their observed behavior change under controlled
+diagnostics?**
 
-The cross-experiment summary contains 25 representative paired contrasts
-selected by a fixed policy from model comparison, feature ablation,
-shuffled-label control, probability calibration, validation robustness, and
-class-imbalance sensitivity. It provides one navigation layer without
-discarding the complete source artifacts.
+| At a glance | Evidence |
+| --- | --- |
+| Dataset | 344 rows, three species, pinned upstream revision and SHA-256 |
+| Models | Majority-class dummy, logistic regression, and fixed 5-nearest neighbors |
+| Partitions | Deterministic 75/25 holdout plus five shared stratified folds |
+| Leakage control | Imputation and scaling fitted inside each training partition |
+| Diagnostics | Feature ablation, shuffled labels, calibration, validation perturbations, and class downsampling |
+| Outputs | 27 report artifacts plus an automatically generated SHA-256 manifest |
+| Stable boundary | CLI, package-root API, artifact names, 15 CSV schemas, and five JSON top-level schemas |
+
+## Representative Comparison
+
+The primary five-fold comparison reports accuracy, balanced accuracy, macro
+F1, and per-class recall on the same validation partitions:
+
+| Model | Role | Accuracy, mean ± std | Macro F1, mean ± std |
+| --- | --- | ---: | ---: |
+| Majority-class dummy | Reference baseline | 0.442 ± 0.006 | 0.204 ± 0.002 |
+| Logistic regression | Linear baseline | 0.945 ± 0.034 | 0.928 ± 0.041 |
+| 5-nearest neighbors | Nonlinear comparator | 0.959 ± 0.011 | 0.949 ± 0.018 |
+
+KNN's paired macro-F1 difference from logistic regression is +0.021 on
+average, but individual folds range from -0.011 to +0.108. This supports a
+useful nonlinear comparison under the fixed setup, not a claim that KNN is
+universally better.
+
+On the deterministic holdout, KNN correctly classifies 83 of 86 rows and
+logistic regression classifies 81. Row-level outcomes remain inspectable in
+[`predictions.csv`](results/predictions.csv).
+
+The cross-experiment summary then selects 25 predefined contrasts from six
+experiment families without selecting rows by effect size:
 
 ![Representative cross-experiment macro-F1 contrasts](results/cross_experiment_summary.png)
 
-Positive `preferred_effect_mean` values favor the condition after accounting
-for whether a metric is higher- or lower-is-better. The figure intentionally
-shows only the 15 macro-F1 contrasts; all 25 contrasts, including probability
-metrics and target-class recall, are available in
-[`cross_experiment_summary.csv`](results/cross_experiment_summary.csv).
-Effects from different metric scales must not be compared by magnitude.
+The figure shows only 15 macro-F1 contrasts so the horizontal scale has one
+meaning. The complete
+[`cross_experiment_summary.csv`](results/cross_experiment_summary.csv) also
+contains probability metrics and target-class recall. Their effect magnitudes
+must not be compared across metric scales.
 
-## Problem
+## Evaluation Boundaries
 
-A model score has little meaning without a reference baseline, a clearly
-defined split, leakage-aware preprocessing, class-sensitive metrics, and
-inspectable predictions. Small demonstrations often omit one or more of these
-elements and make the result difficult to reproduce or interpret.
+- The numerical evidence comes from one small public dataset, one holdout
+  split, and one five-fold partition.
+- The three fixed models are controlled comparators; no hyperparameter search
+  or model selection is performed.
+- Fold standard deviations describe the five observed folds and are not
+  confidence intervals.
+- Split-integrity checks and shuffled labels test specific failure modes but
+  cannot prove the absence of every form of leakage.
+- Missing values, Gaussian noise, and class downsampling are synthetic
+  sensitivity tests, not measured production drift.
+- Stable software and artifact interfaces do not imply deployment suitability
+  or performance on independent data.
 
-This project keeps those decisions explicit:
-
-- The dataset bytes and upstream revision are fixed.
-- The dummy model establishes a minimum reference.
-- Imputation and scaling are fitted only on the training partition.
-- Accuracy is reported alongside balanced accuracy, macro F1, and per-class
-  recall.
-- Holdout metrics, fold-level evidence, row-level predictions, and figures are
-  committed as reviewable artifacts.
-
-## Key Features
-
-- Pinned, checksum-verified public dataset
-- Deterministic stratified train/test split
-- Five-fold stratified cross-validation shared by all three models
-- Majority-class `DummyClassifier` baseline
-- Median imputation and standardization inside a scikit-learn `Pipeline`
-- Logistic-regression classifier using two interpretable measurements
-- Fixed 5-nearest-neighbors nonlinear comparator without parameter tuning
-- Compact holdout and cross-validation model-comparison table
-- Three-way feature ablation on shared folds
-- Per-fold and summary ablation artifacts with paired differences
-- Train/validation overlap and validation-coverage diagnostics
-- Within-fold shuffled-training-label negative control
-- Cross-fitted uncalibrated and sigmoid-calibrated probabilities
-- Log loss, multiclass Brier score, and top-label calibration error
-- Reliability-bin CSV evidence and a calibration figure
-- Validation-only missing-value injection at four fixed rates
-- Gaussian feature noise scaled from each outer training fold
-- Fold-level perturbation accounting and robustness summaries
-- Deterministic downsampling of the least frequent training class
-- Shared class-retention samples at 100%, 75%, 50%, and 25%
-- Target-class recall, class-count evidence, and paired sensitivity summaries
-- Fixed representative contrasts across six experiment families
-- Direction-aligned effect values with preserved paired fold variation
-- Machine-readable CLI, Python API, report, and artifact interface contract
-- Stable 1.x contract for CLI behavior, Python API, and artifact schemas
-- Regression checks for 15 CSV schemas and five JSON top-level key sets
-- Public checksum verification through `ml-evaluation-workbench verify`
-- Automatic manifest generation after every successful evaluation
-- Python 3.12 reference constraints for byte-exact artifact regeneration
-- Accuracy, balanced accuracy, macro F1, and per-class recall
-- Cross-validation mean, population standard deviation, minimum, and maximum
-- Row-level holdout predictions with source-row references
-- Fold-level CSV evidence and a cross-validation score figure
-- Confusion-matrix image for the deterministic holdout
-- CLI with explicit split parameters
-- Atomic JSON, CSV, and PNG artifact replacement
-- Focused tests and GitHub Actions for Python 3.10 through 3.14
+The complete method-specific limits are documented in
+[Limitations and Claim Boundaries](docs/limitations.md).
 
 ## Quick Start
 
-Python 3.10 or later is required.
-On Debian or Ubuntu, install `python3-venv` if `venv` reports that `ensurepip`
-is unavailable.
+Python 3.10 or later is required. On Debian or Ubuntu, install
+`python3-venv` if `venv` reports that `ensurepip` is unavailable.
 
 ```bash
 git clone https://github.com/cab0a/ml-evaluation-workbench.git
@@ -121,569 +98,128 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e .
-```
-
-Verify the committed dataset and run the evaluation:
-
-```bash
 python examples/download_penguins.py --check
 ml-evaluation-workbench evaluate data/penguins.csv \
   --output-dir output/quickstart
 ml-evaluation-workbench verify output/quickstart
 ```
 
-The evaluation writes twenty-seven report artifacts and
-`checksums.sha256` under `output/quickstart/`; the next command verifies the
-complete documented set.
-Start with `cross_experiment_summary.csv` and
-`cross_experiment_summary.png` for a compact evidence map, then use
-`interface_contract.json` to inspect the documented interfaces. Complete
-fold-level and row-level evidence remains available in the experiment-specific
-artifacts. Checksum-fixed reference copies are committed under `results/`.
-
-## Usage
-
-```text
-ml-evaluation-workbench evaluate DATASET [--output-dir DIR]
-                                         [--random-state INTEGER]
-                                         [--test-size FRACTION]
-                                         [--cv-folds INTEGER]
-                                         [--calibration-folds INTEGER]
-
-ml-evaluation-workbench verify ARTIFACT_DIR
-```
-
-The documented v1.0 evaluation command is:
-
-```bash
-ml-evaluation-workbench evaluate data/penguins.csv \
-  --output-dir results \
-  --random-state 42 \
-  --test-size 0.25 \
-  --cv-folds 5 \
-  --calibration-folds 3
-```
-
-Expected summary:
-
-```text
-Dataset rows: 344
-Training rows: 258
-Test rows: 86
-Dummy accuracy: 0.442
-Logistic regression accuracy: 0.942
-Logistic regression macro F1: 0.924
-KNN accuracy: 0.965
-KNN macro F1: 0.960
-Cross-validation folds: 5
-Logistic regression CV macro F1 mean: 0.928
-Logistic regression CV macro F1 std: 0.041
-KNN CV macro F1 mean: 0.949
-KNN CV macro F1 std: 0.018
-Logistic regression shuffled-label macro F1 mean: 0.254
-KNN shuffled-label macro F1 mean: 0.298
-Split integrity check: passed
-logistic_regression CV log loss, uncalibrated: 0.139
-logistic_regression CV log loss, sigmoid calibrated: 0.236
-logistic_regression macro F1 at 50% injected missingness: 0.624
-logistic_regression macro F1 at 1.0x feature noise: 0.692
-logistic_regression macro F1 at 25% Chinstrap retention: 0.885
-logistic_regression Chinstrap recall at 25% retention: 0.619
-knn CV log loss, uncalibrated: 0.280
-knn CV log loss, sigmoid calibrated: 0.133
-knn macro F1 at 50% injected missingness: 0.625
-knn macro F1 at 1.0x feature noise: 0.673
-knn macro F1 at 25% Chinstrap retention: 0.922
-knn Chinstrap recall at 25% retention: 0.737
-Cross-experiment contrasts: 25
-Metrics: results/metrics.json
-Predictions: results/predictions.csv
-Confusion matrix: results/confusion_matrix.png
-Cross-validation fold scores: results/cross_validation_folds.csv
-Cross-validation scores: results/cross_validation_scores.png
-Model comparison: results/model_comparison.csv
-Feature ablation folds: results/feature_ablation_folds.csv
-Feature ablation summary: results/feature_ablation_summary.csv
-Feature ablation scores: results/feature_ablation_scores.png
-Leakage diagnostic folds: results/leakage_diagnostic_folds.csv
-Leakage diagnostics: results/leakage_diagnostics.json
-Probability calibration folds: results/probability_calibration_folds.csv
-Probability calibration summary: results/probability_calibration_summary.csv
-Probability calibration predictions: results/probability_calibration_predictions.csv
-Probability calibration bins: results/probability_calibration_bins.csv
-Probability calibration plot: results/probability_calibration.png
-Robustness folds: results/robustness_folds.csv
-Robustness summary: results/robustness_summary.csv
-Robustness diagnostics: results/robustness_diagnostics.json
-Robustness plot: results/robustness.png
-Class-imbalance folds: results/class_imbalance_folds.csv
-Class-imbalance summary: results/class_imbalance_summary.csv
-Class-imbalance diagnostics: results/class_imbalance_diagnostics.json
-Class-imbalance plot: results/class_imbalance.png
-Cross-experiment summary: results/cross_experiment_summary.csv
-Cross-experiment plot: results/cross_experiment_summary.png
-Interface contract: results/interface_contract.json
-Checksums: results/checksums.sha256
-```
-
-Verify the generated files independently:
-
-```bash
-ml-evaluation-workbench verify results
-```
-
-Expected verification summary:
+The evaluation writes 27 report artifacts and
+`output/quickstart/checksums.sha256`. Verification should report:
 
 ```text
 Verified: 27 artifacts
-Manifest: results/checksums.sha256
+Manifest: output/quickstart/checksums.sha256
 ```
 
-## Technical Design
+Start with:
 
-### Dataset
+1. `cross_experiment_summary.png` for the comparison map;
+2. `cross_experiment_summary.csv` for the 25 selected contrasts;
+3. `model_comparison.csv` for the primary baselines; and
+4. `metrics.json` and the fold-level CSV files for complete evidence.
 
-The repository includes the simplified Palmer Penguins dataset maintained by
-Allison Horst, Alison Hill, and Kristen Gorman. It contains 344 rows and eight
-columns. The data are available under CC0 1.0.
-
-- [Dataset documentation](https://allisonhorst.github.io/palmerpenguins/)
-- [Dataset license](https://allisonhorst.github.io/palmerpenguins/LICENSE.html)
-- [Pinned provenance and checksum](data/README.md)
-
-Only `bill_length_mm` and `bill_depth_mm` are used as model inputs. Island,
-sex, body mass, flipper length, and observation year are intentionally excluded
-from v1.0. This keeps the question interpretable and avoids relying on
-location-specific correlations that can make a random holdout unnecessarily
-easy.
-
-## Evaluation Methodology
-
-1. Load the pinned CSV and preserve its source-row index.
-2. Create a 75/25 stratified holdout split with random state 42.
-3. Fit median imputation on the training bill measurements.
-4. Fit standardization on the imputed training measurements.
-5. Train a majority-class dummy, logistic regression, and 5-nearest-neighbors
-   classifier using equivalent input rows.
-6. Keep the KNN configuration fixed at five neighbors, uniform weighting, and
-   Euclidean distance; do not select it from these evaluation scores.
-7. Evaluate all three models on the untouched holdout partition.
-8. Run five-fold stratified cross-validation, using the same shuffled folds
-   for all models and refitting each complete pipeline inside every fold.
-9. Summarize each metric with its mean, population standard deviation,
-   minimum, and maximum across the five observed folds.
-10. Evaluate bill length alone, bill depth alone, and both measurements for
-    logistic regression and KNN on the same folds.
-11. Verify zero train/validation row overlap and exactly-once validation
-    coverage across the folds.
-12. Shuffle only the training labels inside each fold, refit both substantive
-    models, and compare the negative-control scores with observed scores.
-13. Compare uncalibrated probabilities with sigmoid calibration on the same
-    outer folds. Fit each calibrator with three stratified folds drawn only
-    from the corresponding outer training partition.
-14. Record fold-level log loss, multiclass Brier score, top-label expected
-    calibration error, cross-fitted probabilities, and reliability bins.
-15. Inject missing values into 0%, 10%, 25%, and 50% of previously observed
-    validation feature cells using deterministic seeds shared by both models.
-16. Add zero-mean Gaussian noise to observed validation cells at 0, 0.25,
-    0.5, and 1.0 times each outer training fold's feature standard deviation.
-17. Compare every perturbed score with the unperturbed score on the same fold.
-18. Within each outer training fold, retain 100%, 75%, 50%, or 25% of the
-    globally least frequent class using deterministic samples shared by both
-    substantive models.
-19. Keep every validation partition unchanged, and record retained source-row
-    hashes, class counts, target-class recall, and paired differences from full
-    retention.
-20. Select a fixed representative set of comparisons from the six experiment
-    families. Preserve same-fold differences and align their signs so a
-    positive preferred effect always favors the condition.
-21. Record the installed CLI, Python API, report schema, supported Python
-    versions, and generated-artifact inventory in a machine-readable interface
-    contract.
-22. Save aggregate metrics, fold-level evidence, diagnostic summaries,
-    predictions, and evaluation figures.
-23. Atomically write a SHA-256 manifest covering the 27 documented report
-    artifacts.
-
-The preprocessing steps are part of each scikit-learn `Pipeline`, so their
-statistics are not estimated from the holdout partition or a fold's validation
-partition.
+Checksum-fixed reference copies are committed under [`results/`](results/).
 
 ## Generated Artifacts
 
-`metrics.json` contains:
+| Area | Main artifacts | What to inspect |
+| --- | --- | --- |
+| Complete evaluation | `metrics.json` | Dataset identity, settings, metrics, experiment summaries, and report version |
+| Primary comparison | `model_comparison.csv`, `cross_validation_folds.csv`, `predictions.csv` | Baseline roles, fold variability, paired results, and row-level holdout errors |
+| Feature ablation | `feature_ablation_summary.csv`, `feature_ablation_folds.csv` | Shared-fold differences from the two-feature reference |
+| Leakage diagnostics | `leakage_diagnostics.json`, `leakage_diagnostic_folds.csv` | Split integrity and shuffled-label negative control |
+| Calibration | `probability_calibration_summary.csv`, `probability_calibration_predictions.csv`, `probability_calibration_bins.csv` | Cross-fitted probabilities, probability metrics, and reliability evidence |
+| Robustness | `robustness_summary.csv`, `robustness_folds.csv`, `robustness_diagnostics.json` | Perturbation scope, affected cells, metrics, and paired effects |
+| Class imbalance | `class_imbalance_summary.csv`, `class_imbalance_folds.csv`, `class_imbalance_diagnostics.json` | Retained rows, class counts, target recall, and paired effects |
+| Navigation | `cross_experiment_summary.csv`, `cross_experiment_summary.png` | Fixed representative contrasts and their source artifacts |
+| Interface review | `interface_contract.json`, `checksums.sha256` | Stable CLI/API/schema inventory and byte verification |
 
-- `report_version` and `project_version`
-- dataset path, SHA-256, row count, classes, selected features, and missing
-  feature-cell count
-- split strategy, seed, fraction, and train/test row counts
-- classifier configuration, accuracy, balanced accuracy, macro F1, and
-  per-class recall for each model
-- holdout differences for logistic regression versus dummy, KNN versus dummy,
-  and KNN versus logistic regression
-- cross-validation strategy and fold count
-- per-model cross-validation mean, population standard deviation, minimum, and
-  maximum
-- paired fold-level differences for all three controlled comparisons
-- feature-ablation configuration, summaries, and paired differences from the
-  two-feature reference
-- split-integrity checks and shuffled-training-label negative-control summaries
-- probability-calibration design, metric definitions, method summaries, and
-  paired fold-level differences
-- robustness protocol, perturbation definitions, seed rules, cell accounting,
-  condition summaries, and paired differences from unperturbed scores
-- class-imbalance target selection, retention levels, sampling policy,
-  condition summaries, and paired differences from full retention
-- cross-experiment selection policy, metric-direction rules, source artifacts,
-  and the number and scope of representative contrasts
+The complete 27-artifact inventory and schema policy are documented in
+[Artifact Schema](docs/artifact-schema.md). Detailed numerical interpretation
+is maintained in [Reference Results](results/README.md).
 
-`predictions.csv` contains:
+## Key Features
 
-- original one-based CSV source row, including the header offset
-- actual class
-- dummy, logistic-regression, and KNN predictions
-- correctness flags for each model
+- Pinned public dataset with offline SHA-256 verification
+- Shared holdout and cross-validation partitions across controlled comparisons
+- Training-partition-only median imputation and standardization
+- Majority-class reference, fixed linear baseline, and fixed nonlinear
+  comparator
+- Paired fold-level comparisons and row-level holdout predictions
+- Split-integrity checks and a within-fold shuffled-label negative control
+- Cross-fitted probability calibration with saved probability vectors and bins
+- Deterministic validation perturbations with affected-cell accounting
+- Deterministic class downsampling with retained-row signatures
+- Fixed cross-experiment selection policy with source-artifact traceability
+- Atomic per-file writes and a manifest covering all 27 report artifacts
+- Stable CLI, package-root API, artifact schemas, and Python 3.10–3.14 CI
 
-`cross_validation_folds.csv` contains one row per model and fold, including
-train and validation row counts, the three aggregate metrics, and per-class
-recall.
+## Evaluation Design
 
-`model_comparison.csv` provides one compact row per model with its evaluation
-role, holdout metrics, and cross-validation means and standard deviations.
+The fixed workflow combines:
 
-`feature_ablation_folds.csv` records 30 model-feature-fold evaluations.
-`feature_ablation_summary.csv` provides one row per model and feature set,
-including paired mean differences from the two-feature reference.
-`feature_ablation_scores.png` visualizes macro F1 and observed fold
-variation.
+1. deterministic holdout and shared stratified outer folds;
+2. primary model comparison;
+3. three-way feature ablation;
+4. split-integrity and shuffled-label diagnostics;
+5. uncalibrated versus sigmoid probability evaluation;
+6. validation-only missing-value and Gaussian-noise perturbations;
+7. controlled least-frequent-class retention; and
+8. a predefined cross-experiment navigation summary.
 
-`leakage_diagnostic_folds.csv` records the observed and shuffled-label scores
-for each substantive model and fold. `leakage_diagnostics.json` records split
-integrity, validation coverage, negative-control summaries, and the diagnostic
-interpretation boundary.
-
-`probability_calibration_folds.csv` records accuracy, log loss, multiclass
-Brier score, and top-label expected calibration error for each model, method,
-and outer fold. `probability_calibration_summary.csv` provides compact means
-and fold standard deviations. `probability_calibration_predictions.csv`
-contains one cross-fitted probability vector per source row, model, and
-method. `probability_calibration_bins.csv` records the ten equal-width
-top-label reliability bins used by `probability_calibration.png`.
-
-`robustness_folds.csv` records one row per perturbation, severity, fold, and
-model, including affected-cell counts, realized fractions, noise scales, and
-classification metrics. `robustness_summary.csv` provides fold summaries and
-paired mean differences from the unperturbed condition.
-`robustness_diagnostics.json` fixes the perturbation protocol and
-interpretation boundary. `robustness.png` visualizes macro-F1 sensitivity.
-
-`class_imbalance_folds.csv` records one row per retention level, fold, and
-model, including the deterministic seed, retained-row signature, before/after
-class counts, aggregate metrics, and per-class recall.
-`class_imbalance_summary.csv` provides fold summaries and paired mean
-differences from full retention. `class_imbalance_diagnostics.json` fixes the
-target-class selection and sampling rules. `class_imbalance.png` visualizes
-macro F1 and Chinstrap-recall sensitivity.
-
-`cross_experiment_summary.csv` contains 25 fixed representative contrasts
-across six experiment families. Every row records its reference and condition,
-metric direction, fold means and population standard deviations, paired
-condition-minus-reference differences, direction-aligned preferred effect,
-source artifact, and interpretation. `cross_experiment_summary.png` visualizes
-the 15 macro-F1 contrasts only, avoiding magnitude comparisons across
-incompatible metric scales.
-
-`interface_contract.json` records interface-contract schema version 3, the
-project and report versions, Python compatibility, both CLI commands and exit
-codes, package exports, public function signatures, `EvaluationResult` fields,
-generated artifacts, all 15 CSV column sequences, top-level keys for all five
-JSON artifacts, and the reference-environment policy.
-
-`confusion_matrix.png` visualizes the logistic-regression holdout errors.
-`cross_validation_scores.png` shows all three models' aggregate scores in
-each fold. `checksums.sha256` is written automatically after evaluation and
-fixes the bytes of all twenty-seven reference artifacts.
+The same-fold design preserves paired differences. Preprocessing and
+calibration remain inside their permitted training partitions. Exact models,
+metrics, seeds, severities, sampling rules, and the full evaluation sequence
+are documented in [Evaluation Design](docs/evaluation-design.md). CLI defaults,
+validation rules, and the public Python API are documented in
+[Configuration and Interfaces](docs/configuration.md).
 
 ## Results
 
-### Cross-Experiment Summary
+| Experiment | Selected result | Interpretation boundary |
+| --- | --- | --- |
+| Primary comparison | KNN CV macro F1 `0.949 ± 0.018`; logistic `0.928 ± 0.041`; dummy `0.204 ± 0.002` | Fixed models and folds; not universal ranking |
+| Feature ablation | Removing either measurement reduces mean macro F1 by at least `0.284` for KNN and `0.353` for logistic | Descriptive signal, not causal importance |
+| Shuffled labels | Macro F1 falls to `0.254 ± 0.052` for logistic and `0.298 ± 0.054` for KNN | Negative control does not exclude all leakage |
+| Calibration | Sigmoid lowers KNN log loss by `0.148` but worsens its top-label ECE; all three recorded probability metrics worsen for logistic | Method and metric dependent |
+| 50% injected missingness | Macro F1 falls by `0.304` for logistic and `0.324` for KNN | Synthetic validation perturbation |
+| 25% Chinstrap retention | Chinstrap recall falls by `0.203` for logistic and `0.158` for KNN | Downsampling changes prevalence and sample size |
 
-The fixed cross-experiment policy selects 25 contrasts from six existing
-experiment families. Selection is based on experiment role and tested
-severity, not on effect size. Representative rows include:
-
-| Experiment | Condition vs Reference | Metric | Preferred Effect |
-| --- | --- | --- | ---: |
-| Model comparison | KNN vs majority dummy | Macro F1 | +0.745 |
-| Feature ablation | Bill depth only vs both, logistic | Macro F1 | -0.359 |
-| Negative control | Shuffled vs observed, logistic | Macro F1 | -0.674 |
-| Calibration | Sigmoid vs uncalibrated, KNN | Log loss | +0.148 |
-| Validation robustness | 50% missing vs unperturbed, KNN | Macro F1 | -0.324 |
-| Class imbalance | 25% vs 100% Chinstrap, logistic | Chinstrap recall | -0.203 |
-
-For lower-is-better metrics such as log loss, `preferred_effect_mean` reverses
-the raw condition-minus-reference sign. This makes direction consistent
-within the navigation table, but it does not put accuracy, loss, calibration,
-recall, and macro F1 on a common scale. Each row links back to its complete
-source artifact.
-
-![Representative cross-experiment macro-F1 contrasts](results/cross_experiment_summary.png)
-
-### Holdout Comparison
-
-| Model | Accuracy | Balanced Accuracy | Macro F1 |
-| --- | ---: | ---: | ---: |
-| Majority-class dummy | 0.442 | 0.333 | 0.204 |
-| Logistic regression | 0.942 | 0.920 | 0.924 |
-| 5-nearest neighbors | 0.965 | 0.959 | 0.960 |
-
-KNN correctly classifies 83 of 86 holdout rows, compared with 81 for logistic
-regression. KNN macro F1 is 0.036 higher on this holdout. Its three errors are
-one Chinstrap predicted as Gentoo and two Gentoo observations predicted as
-Adelie and Chinstrap.
-
-The logistic-regression confusion matrix is retained for continuity with the
-earlier baseline; model-specific correctness is available in
-`predictions.csv`.
-
-![Logistic regression confusion matrix](results/confusion_matrix.png)
-
-### Five-Fold Cross-Validation
-
-| Model | Accuracy, mean ± std | Balanced Accuracy, mean ± std | Macro F1, mean ± std |
-| --- | ---: | ---: | ---: |
-| Majority-class dummy | 0.442 ± 0.006 | 0.333 ± 0.000 | 0.204 ± 0.002 |
-| Logistic regression | 0.945 ± 0.034 | 0.924 ± 0.043 | 0.928 ± 0.041 |
-| 5-nearest neighbors | 0.959 ± 0.011 | 0.948 ± 0.023 | 0.949 ± 0.018 |
-
-KNN's mean paired macro-F1 difference from logistic regression is +0.021, but
-the fold-level range is -0.011 to +0.108. KNN is more stable in these five
-folds and avoids logistic regression's fold-4 drop, while logistic regression
-slightly leads in another fold. The controlled result supports a useful
-nonlinear comparison, not universal KNN superiority.
-
-![Cross-validation fold scores](results/cross_validation_scores.png)
-
-### Feature Ablation
-
-| Feature set | Logistic Macro F1 | KNN Macro F1 |
-| --- | ---: | ---: |
-| Bill length only | 0.575 ± 0.012 | 0.647 ± 0.073 |
-| Bill depth only | 0.569 ± 0.024 | 0.665 ± 0.050 |
-| Both measurements | 0.928 ± 0.041 | 0.949 ± 0.018 |
-
-Removing either measurement reduces mean macro F1 by at least 0.284 for KNN
-and 0.353 for logistic regression relative to the shared two-feature
-reference. Under these fixed models and folds, the measurements provide
-complementary predictive signal.
-
-### Leakage Diagnostics
-
-- Maximum train/validation overlap: 0 rows
-- Validation coverage: exactly once for every row
-- Logistic-regression shuffled-label macro F1: 0.254 ± 0.052
-- KNN shuffled-label macro F1: 0.298 ± 0.054
-- Observed-minus-shuffled macro-F1 mean: 0.674 for logistic regression and
-  0.651 for KNN
-
-The negative-control scores are substantially below the observed scores. This
-is consistent with the models using the intended feature-label association,
-but it does not prove that every possible source of leakage is absent.
-
-### Probability Calibration
-
-| Model and method | Accuracy | Log loss | Multiclass Brier | Top-label ECE |
-| --- | ---: | ---: | ---: | ---: |
-| Logistic, uncalibrated | 0.945 | 0.139 | 0.072 | 0.064 |
-| Logistic, sigmoid | 0.936 | 0.236 | 0.117 | 0.114 |
-| KNN, uncalibrated | 0.959 | 0.280 | 0.056 | 0.030 |
-| KNN, sigmoid | 0.965 | 0.133 | 0.057 | 0.071 |
-
-Sigmoid calibration reduces KNN mean log loss by 0.148 but slightly increases
-its Brier score and increases top-label ECE. For logistic regression, all
-three recorded probability-quality metrics worsen. The methods therefore
-produce a metric-dependent result rather than evidence that calibration is
-uniformly beneficial. The reliability points are descriptive summaries of
-the 344 cross-fitted predictions per model and method.
-
-![Top-label reliability diagram](results/probability_calibration.png)
-
-### Missing-Value and Noise Robustness
-
-| Perturbation | Severity | Logistic Macro F1 | KNN Macro F1 |
-| --- | ---: | ---: | ---: |
-| Injected missing values | 0% | 0.928 | 0.949 |
-| Injected missing values | 10% | 0.845 | 0.870 |
-| Injected missing values | 25% | 0.770 | 0.759 |
-| Injected missing values | 50% | 0.624 | 0.625 |
-| Gaussian feature noise | 0.00x | 0.928 | 0.949 |
-| Gaussian feature noise | 0.25x | 0.910 | 0.920 |
-| Gaussian feature noise | 0.50x | 0.860 | 0.839 |
-| Gaussian feature noise | 1.00x | 0.692 | 0.673 |
-
-At the highest tested severities, logistic regression loses 0.304 macro F1
-under missingness and 0.237 under noise; KNN loses 0.324 and 0.277. These are
-paired mean differences under fixed synthetic perturbations, not estimates of
-performance under a real acquisition failure or production drift.
-
-![Missing-value and noise robustness](results/robustness.png)
-
-### Class-Imbalance Sensitivity
-
-Chinstrap is the least frequent class in the fixed dataset, with 68 of 344
-rows. The experiment downsamples only its rows inside each outer training
-fold. All validation rows and labels remain unchanged.
-
-| Chinstrap Retention | Mean Training Share | Logistic Macro F1 | Logistic Recall | KNN Macro F1 | KNN Recall |
-| ---: | ---: | ---: | ---: | ---: | ---: |
-| 100% | 19.8% | 0.928 | 0.822 | 0.949 | 0.896 |
-| 75% | 15.5% | 0.934 | 0.823 | 0.945 | 0.867 |
-| 50% | 11.0% | 0.928 | 0.765 | 0.941 | 0.838 |
-| 25% | 6.0% | 0.885 | 0.619 | 0.922 | 0.737 |
-
-At 25% retention, logistic regression loses 0.043 mean macro F1 and 0.203
-mean Chinstrap recall relative to full retention. KNN loses 0.027 macro F1 and
-0.158 Chinstrap recall. The 75% logistic-regression result is slightly above
-its full-retention mean, so the observed response is not strictly monotonic at
-every level.
-
-![Class-imbalance sensitivity](results/class_imbalance.png)
-
-See [results/README.md](results/README.md) for interpretation and the boundary
-between this controlled result and a general performance claim.
-
-## Limitations
-
-- Version 1.0.0 evaluates one small dataset with one deterministic holdout and
-  one five-fold stratified cross-validation run.
-- A random row split does not measure transfer across islands, years, field
-  conditions, or independent collection programs.
-- The simplified dataset does not provide a grouping identifier suitable for
-  testing repeated observations of the same individual.
-- Four selected feature cells are missing and use training-partition median
-  imputation. Other missingness mechanisms are not evaluated.
-- The two-feature design is intentionally constrained and does not establish
-  an optimal feature set.
-- The three fixed models are controlled comparators, not a comprehensive model
-  search.
-- The KNN configuration is chosen in advance and is not claimed to be optimal.
-  Different neighbor counts, weights, or distance metrics are not evaluated.
-- Ablation differences are descriptive for the two selected measurements and
-  do not establish causal feature importance.
-- Reusing one cross-validation partition limits sensitivity analysis across
-  alternative split seeds.
-- Split-integrity checks and a shuffled-label negative control can reveal some
-  implementation failures but cannot prove the absence of all leakage.
-- Sigmoid is the only calibration method evaluated. Its three inner folds are
-  fixed in advance and are not compared with isotonic or other approaches.
-- Top-label ECE depends on ten fixed equal-width bins and can hide class-level
-  or within-bin calibration behavior. Empty bins provide no evidence.
-- Calibration estimates are based on a small dataset. Differences between
-  metrics and folds should not be treated as deployment guarantees.
-- Missing-value injection is independent across observed feature cells and
-  does not represent a measured missingness mechanism.
-- Gaussian perturbations are independent, zero mean, and scaled from training
-  folds. They do not model bias, outliers, correlated sensor noise, or drift.
-- Structured missingness, label noise, combined perturbations, and changes to
-  non-target training classes are outside the v1.0 scope.
-- The class-imbalance experiment downsamples only Chinstrap, selected because
-  it is globally least frequent in this dataset. It does not evaluate other
-  target classes, oversampling, class weighting, threshold changes, or
-  mitigation strategies.
-- Downsampling changes both class prevalence and training-set size. The
-  experiment does not isolate those two effects or model population-prior
-  shift in validation data.
-- Class-retention samples use one deterministic seed per fold and condition.
-  Alternative retained rows can produce different sensitivity curves.
-- The cross-experiment summary is a selective navigation artifact, not a
-  statistical meta-analysis. Its fixed policy omits intermediate robustness
-  and class-retention severities.
-- Direction alignment makes favorable signs consistent, but preferred effects
-  from different metrics are not standardized or comparable by magnitude.
-- The stable contract covers documented software interfaces and the
-  reproduction workflow. It does not guarantee model quality, dependency
-  behavior outside the supported ranges, or byte-identical output outside the
-  reference environment.
-- The Python 3.12 constraints define the byte-exact reference environment, not
-  the only supported environment. Other supported Python and dependency
-  combinations are checked for successful, self-consistent generation rather
-  than equality with committed PNG bytes.
-- The five fold scores are correlated because their training partitions
-  overlap. Their standard deviation is descriptive and is not a confidence
-  interval.
-- The committed results are specific to this dataset revision, split, feature
-  selection, preprocessing, and dependency behavior.
-- Species labels and measurements are treated as given; label uncertainty and
-  measurement error are not modeled.
-- The result is not intended for field identification, ecological inference,
-  or decisions affecting wildlife.
-
-## Stable Interfaces
-
-Version 1.0.0 defines the documented surfaces that downstream users can depend
-on throughout the 1.x release line:
-
-- CLI: `evaluate` with the five documented options and `verify` with an
-  artifact directory
-- Exit code `0` for success and `2` for argument, input, or output errors
-- Python exports including `evaluate_dataset`, `EvaluationResult`, and
-  `verify_artifact_manifest`
-- `metrics.json` report schema version 8 and its top-level sections
-- Interface-contract schema version 3
-- Twenty-seven generated artifact names, their roles, and the checksum
-  manifest
-- Ordered columns for all 15 CSV artifacts
-- Ordered top-level keys for all five JSON artifacts
-- Python 3.10 through 3.14 compatibility exercised in CI
-- Python 3.12 plus `requirements-reproducibility.txt` as the byte-exact
-  reference environment
-
-[`interface_contract.json`](results/interface_contract.json) is generated with
-each evaluation. Its artifact inventory and `EvaluationResult` fields come
-from implementation-level definitions, while the documented CLI and Python
-surfaces are explicitly reviewed for this release. Backward-compatible
-additions and corrections can occur in later 1.x releases; removing or
-changing a documented stable interface requires a new major version.
-
-This promise concerns software interfaces and reproducible evaluation
-artifacts. It does not make the fitted examples production-ready or guarantee
-their performance on new data.
+The committed artifacts also include confusion matrix, fold-score,
+feature-ablation, calibration, robustness, and class-imbalance figures. See
+[Reference Results](results/README.md) for complete tables, protocol-specific
+interpretation, and continuity with earlier releases.
 
 ## Reproducibility
 
-The dataset bytes, source revision, split parameters, model configurations,
-feature sets, reference constraints, and checksum manifest are committed.
-For byte-exact regeneration, use Python 3.12 on the documented Ubuntu
-environment and install the reference constraints:
+Verify the committed dataset and artifacts without changing them:
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install --upgrade pip
-python -m pip install -c requirements-reproducibility.txt -e .
 python examples/download_penguins.py --check
-python examples/run_demo.py
 ml-evaluation-workbench verify results
-git diff --exit-code -- results/
 ```
 
-For a non-destructive compatibility check, generate into another directory:
+Run a non-destructive compatibility evaluation:
 
 ```bash
 python examples/run_demo.py --output-dir .work/generated
 ml-evaluation-workbench verify .work/generated
 ```
 
-The Python 3.10 through 3.14 matrix installs the declared dependency ranges and
-requires successful tests, generation, and verification of each newly
-generated manifest. A separate Python 3.12 job installs
-`requirements-reproducibility.txt` and requires an exact diff match with
-committed `results/`. This distinguishes broad runtime compatibility from
-byte-exact reference reproduction.
+Regenerate the byte-exact reference set with Python 3.12 on the documented
+Ubuntu environment:
 
-JSON, CSV, PNG, and manifest files are replaced atomically. Exact reference
-bytes are fixed by `results/checksums.sha256`; figures are generated from the
-same recorded evaluation values.
+```bash
+python -m pip install -c requirements-reproducibility.txt -e .
+python examples/run_demo.py
+ml-evaluation-workbench verify results
+git diff --exit-code -- results/
+```
+
+The Python 3.10 through 3.14 matrix requires successful tests, generation, and
+self-consistent manifest verification. A separate Python 3.12 job uses pinned
+constraints and requires regenerated `results/` to match the committed bytes.
 
 ## Development and Testing
 
@@ -692,101 +228,50 @@ python -m pip install -e ".[dev]"
 python -m pytest
 ```
 
-Tests cover stable interface regression, dataset validation, holdout and
-cross-validation behavior,
-feature-ablation accounting, leakage diagnostics, robustness and
-class-imbalance protocols, cross-experiment selection and metric direction,
-interface-contract contents, report schemas, CLI arguments and errors,
-deterministic outputs, manifest generation, checksum verification, and direct
-dependency constraints.
-GitHub Actions checks the installed CLI and dataset, runs the tests and a
-controlled evaluation on Python 3.10 through 3.14, and independently requires
-a Python 3.12 regeneration to match committed `results/`.
+Tests cover dataset provenance, deterministic evaluation, split behavior,
+feature ablation, leakage diagnostics, probability outputs, perturbation
+accounting, class-retention sampling, summary selection, CLI errors, public API
+signatures, artifact schemas, manifest verification, and reference
+constraints.
 
 ## Compatibility
 
-Python 3.10 through 3.14 are exercised in CI. Version 1.0.0 marks the
-documented CLI, Python API, artifact names, CSV column order, and JSON
-top-level keys as stable within 1.x. This software stability statement does
-not imply that the example models are suitable for production deployment.
-Release changes are recorded in [`CHANGELOG.md`](CHANGELOG.md).
+Version 1.0.0 keeps the documented CLI and exit meanings, package-root Python
+API, `EvaluationResult` fields, 27 artifact names, 15 CSV column sequences,
+five JSON top-level key sequences, report version 8, and interface-contract
+version 3 stable throughout 1.x.
 
-## Project Structure
+Python 3.10 through 3.14 compatibility and Python 3.12 byte-exact reproduction
+are separate claims. See [Compatibility](docs/compatibility.md) for compatible
+extensions, breaking-change criteria, environment scope, and exclusions.
 
-```text
-ml-evaluation-workbench/
-├── .github/workflows/ci.yml
-├── data/
-│   ├── README.md
-│   └── penguins.csv
-├── examples/
-│   ├── download_penguins.py
-│   └── run_demo.py
-├── results/
-│   ├── README.md
-│   ├── checksums.sha256
-│   ├── class_imbalance.png
-│   ├── class_imbalance_diagnostics.json
-│   ├── class_imbalance_folds.csv
-│   ├── class_imbalance_summary.csv
-│   ├── confusion_matrix.png
-│   ├── cross_experiment_summary.csv
-│   ├── cross_experiment_summary.png
-│   ├── cross_validation_folds.csv
-│   ├── cross_validation_scores.png
-│   ├── feature_ablation_folds.csv
-│   ├── feature_ablation_scores.png
-│   ├── feature_ablation_summary.csv
-│   ├── interface_contract.json
-│   ├── leakage_diagnostic_folds.csv
-│   ├── leakage_diagnostics.json
-│   ├── metrics.json
-│   ├── model_comparison.csv
-│   ├── predictions.csv
-│   ├── probability_calibration.png
-│   ├── probability_calibration_bins.csv
-│   ├── probability_calibration_folds.csv
-│   ├── probability_calibration_predictions.csv
-│   ├── probability_calibration_summary.csv
-│   ├── robustness.png
-│   ├── robustness_diagnostics.json
-│   ├── robustness_folds.csv
-│   └── robustness_summary.csv
-├── src/ml_evaluation_workbench/
-│   ├── __init__.py
-│   ├── __main__.py
-│   ├── cli.py
-│   ├── dataset.py
-│   ├── evaluation.py
-│   ├── interface.py
-│   ├── reproducibility.py
-│   └── reporting.py
-├── tests/
-├── .gitignore
-├── CHANGELOG.md
-├── LICENSE
-├── MANIFEST.in
-├── README.md
-├── requirements-reproducibility.txt
-└── pyproject.toml
-```
+## Documentation
 
-## Roadmap
+| Document | Contents |
+| --- | --- |
+| [Evaluation Design](docs/evaluation-design.md) | Dataset scope, partitions, preprocessing, six experiment families, and selection policy |
+| [Configuration and Interfaces](docs/configuration.md) | CLI, defaults, fixed settings, Python API, and exit codes |
+| [Artifact Schema](docs/artifact-schema.md) | 27-artifact inventory, report structure, CSV/JSON boundaries, and manifest behavior |
+| [Compatibility](docs/compatibility.md) | Stable 1.x surfaces, breaking changes, and environment distinctions |
+| [Limitations](docs/limitations.md) | Complete numerical, methodological, and claim boundaries |
+| [Reference Results](results/README.md) | Full tables, figures, interpretation, and reproduction review |
+| [Dataset Provenance](data/README.md) | Upstream revision, license, checksum, and verification |
+| [Changelog](CHANGELOG.md) | Versioned project history |
 
-- **v0.2:** Stratified cross-validation and fold-level evidence
-- **v0.3:** Controlled model comparison
-- **v0.4:** Feature ablation and leakage diagnostics
-- **v0.5:** Probability calibration
-- **v0.6:** Missing-value and noise robustness
-- **v0.7:** Class-imbalance sensitivity
-- **v0.8:** Cross-experiment summaries and interface review
-- **v0.9:** Documentation and reproducibility review
-- **v1.0 (current):** Stable portfolio release and 1.x interface contract
-- **v1.x maintenance:** Backward-compatible fixes, dependency review, and
-  documentation improvements
+## Project Layout
+
+| Path | Role |
+| --- | --- |
+| `src/ml_evaluation_workbench/` | Dataset checks, evaluation, reporting, interfaces, CLI, and manifest verification |
+| `data/` | Pinned public dataset and provenance |
+| `examples/` | Dataset verification and complete reproduction entry points |
+| `results/` | Committed JSON, CSV, PNG, and checksum evidence |
+| `tests/` | Evaluation, interface, CLI, schema, and reproducibility regression tests |
+| `docs/` | Evaluation design, configuration, artifact, compatibility, and limitation references |
+| `.github/workflows/ci.yml` | Python compatibility and byte-exact reference jobs |
 
 ## License
 
-Project code is licensed under the MIT License. See [LICENSE](LICENSE). The
-Palmer Penguins data are provided separately under CC0 1.0; see
-[data/README.md](data/README.md).
+Project code is licensed under the [MIT License](LICENSE). Palmer Penguins data
+are provided separately under CC0 1.0; see
+[Dataset Provenance](data/README.md).

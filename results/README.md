@@ -113,6 +113,25 @@ must not be compared across metric scales.
 
 These two-feature scores are the reference for the ablation differences below.
 
+KNN's mean paired macro-F1 difference from logistic regression is +0.020824,
+with fold differences ranging from -0.011 to +0.108. The observed mean
+and range support a useful nonlinear comparison under the fixed partitions;
+they do not establish universal KNN superiority.
+
+## Holdout Comparison
+
+| Model | Accuracy | Balanced Accuracy | Macro F1 |
+| --- | ---: | ---: | ---: |
+| Majority-class dummy | 0.441860 | 0.333333 | 0.204301 |
+| Logistic regression | 0.941860 | 0.919671 | 0.923661 |
+| 5-nearest neighbors | 0.965116 | 0.958887 | 0.959670 |
+
+KNN correctly classifies 83 of 86 holdout rows, compared with 81 for logistic
+regression. Its three errors are one Chinstrap predicted as Gentoo and two
+Gentoo observations predicted as Adelie and Chinstrap. The holdout is a
+deterministic continuity result; model-specific source rows and correctness
+flags are retained in `predictions.csv`.
+
 ## Feature Ablation
 
 | Feature set | Model | Accuracy | Balanced Accuracy | Macro F1 |
