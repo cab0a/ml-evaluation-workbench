@@ -1,10 +1,9 @@
-"""Regenerate or verify the committed v0.8 evaluation artifacts."""
+"""Regenerate or verify the committed v0.9 evaluation artifacts."""
 
 from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
 import json
 import os
 import sys
@@ -12,61 +11,13 @@ from pathlib import Path
 
 from ml_evaluation_workbench.cli import main as workbench_main
 from ml_evaluation_workbench.interface import GENERATED_ARTIFACT_NAMES
+from ml_evaluation_workbench.reproducibility import (
+    verify_artifact_manifest,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_NAMES = GENERATED_ARTIFACT_NAMES
-MANIFEST_NAME = "checksums.sha256"
-
-
-def _sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _write_manifest(output_dir: Path) -> Path:
-    manifest = output_dir / MANIFEST_NAME
-    lines = [
-        f"{_sha256(output_dir / name)}  {name}\n" for name in ARTIFACT_NAMES
-    ]
-    manifest.write_text("".join(lines), encoding="utf-8", newline="\n")
-    return manifest
-
-
-def _verify_manifest(output_dir: Path) -> int:
-    manifest = output_dir / MANIFEST_NAME
-    if not manifest.is_file():
-        raise ValueError(f"Checksum manifest not found: {manifest}")
-    expected: dict[str, str] = {}
-    for line_number, line in enumerate(
-        manifest.read_text(encoding="utf-8").splitlines(), start=1
-    ):
-        parts = line.split("  ", maxsplit=1)
-        if len(parts) != 2:
-            raise ValueError(f"Invalid checksum line {line_number}")
-        digest, name = parts
-        if len(digest) != 64 or any(
-            character not in "0123456789abcdef" for character in digest
-        ):
-            raise ValueError(f"Invalid SHA-256 on line {line_number}")
-        if name not in ARTIFACT_NAMES:
-            raise ValueError(f"Unexpected artifact in manifest: {name}")
-        if name in expected:
-            raise ValueError(f"Duplicate artifact in manifest: {name}")
-        expected[name] = digest
-    if set(expected) != set(ARTIFACT_NAMES):
-        missing = sorted(set(ARTIFACT_NAMES) - set(expected))
-        raise ValueError("Missing manifest artifacts: " + ", ".join(missing))
-    for name, digest in expected.items():
-        artifact = output_dir / name
-        if not artifact.is_file():
-            raise ValueError(f"Artifact not found: {name}")
-        if _sha256(artifact) != digest:
-            raise ValueError(f"Checksum mismatch: {name}")
-    return len(expected)
 
 
 def main() -> int:
@@ -77,7 +28,7 @@ def main() -> int:
     os.chdir(ROOT)
     if args.verify_only:
         try:
-            count = _verify_manifest(args.output_dir)
+            count = verify_artifact_manifest(args.output_dir)
         except ValueError as exc:
             print(f"Verification failed: {exc}", file=sys.stderr)
             return 1
@@ -288,8 +239,10 @@ def main() -> int:
             encoding="utf-8"
         )
     )
-    if interface_contract["project_version"] != "0.8.0":
+    if interface_contract["project_version"] != "0.9.0":
         raise SystemExit("Unexpected interface-contract project version")
+    if interface_contract["contract_version"] != 2:
+        raise SystemExit("Unexpected interface-contract schema version")
     if interface_contract["reports"]["metrics_json"]["report_version"] != 8:
         raise SystemExit("Unexpected interface-contract report version")
     contracted_artifacts = {
@@ -302,8 +255,8 @@ def main() -> int:
         raise SystemExit(
             "Interface-contract artifact list does not match the manifest"
         )
-    manifest = _write_manifest(args.output_dir)
-    print(f"Checksums: {manifest}")
+    count = verify_artifact_manifest(args.output_dir)
+    print(f"Verified generated artifacts: {count}")
     return 0
 
 

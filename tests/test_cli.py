@@ -27,7 +27,7 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert status == 0
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
     predictions = pd.read_csv(tmp_path / "predictions.csv")
-    assert metrics["project_version"] == "0.8.0"
+    assert metrics["project_version"] == "0.9.0"
     assert metrics["report_version"] == 8
     assert metrics["dataset"]["rows"] == 344
     assert metrics["cross_validation"]["folds"] == 5
@@ -73,13 +73,21 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     contract = json.loads(
         (tmp_path / "interface_contract.json").read_text(encoding="utf-8")
     )
-    assert contract["project_version"] == "0.8.0"
-    assert contract["cli"]["command"] == "evaluate"
+    assert contract["project_version"] == "0.9.0"
+    assert contract["contract_version"] == 2
+    assert set(contract["cli"]["commands"]) == {"evaluate", "verify"}
+    assert contract["cli"]["commands"]["evaluate"][
+        "writes_checksum_manifest"
+    ]
     assert contract["reports"]["metrics_json"]["report_version"] == 8
     assert contract["python_api"]["package_exports"] == package_exports
     assert contract["python_api"]["evaluation_result_fields"] == [
         field.name for field in fields(EvaluationResult)
     ]
+    assert contract["reproducibility"]["reference_environment"][
+        "constraints_file"
+    ] == "requirements-reproducibility.txt"
+    assert (tmp_path / "checksums.sha256").stat().st_size > 0
     output = capsys.readouterr().out
     assert "Dummy accuracy:" in output
     assert "Logistic regression macro F1:" in output
@@ -95,6 +103,13 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert "macro F1 at 25% Chinstrap retention:" in output
     assert "Chinstrap recall at 25% retention:" in output
     assert "Cross-experiment contrasts: 25" in output
+    assert "Checksums:" in output
+
+    verify_status = main(["verify", str(tmp_path)])
+    assert verify_status == 0
+    verify_output = capsys.readouterr().out
+    assert "Verified: 27 artifacts" in verify_output
+    assert "Manifest:" in verify_output
 
 
 def test_cli_reports_invalid_test_size(tmp_path: Path, capsys) -> None:
@@ -118,4 +133,19 @@ def test_cli_version(capsys) -> None:
         main(["--version"])
 
     assert exc_info.value.code == 0
-    assert capsys.readouterr().out == "0.8.0\n"
+    assert capsys.readouterr().out == "0.9.0\n"
+
+
+def test_cli_verify_reports_incomplete_manifest(
+    tmp_path: Path,
+    capsys,
+) -> None:
+    (tmp_path / "checksums.sha256").write_text(
+        f"{'0' * 64}  metrics.json\n",
+        encoding="utf-8",
+    )
+
+    status = main(["verify", str(tmp_path)])
+
+    assert status == 2
+    assert "Missing manifest artifacts:" in capsys.readouterr().err

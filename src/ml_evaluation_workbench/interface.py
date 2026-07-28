@@ -157,7 +157,7 @@ def build_interface_contract(
 ) -> dict[str, Any]:
     """Build the documented CLI, Python, and artifact interface contract."""
     return {
-        "contract_version": 1,
+        "contract_version": 2,
         "project_version": project_version,
         "stability": {
             "status": "pre_1_0",
@@ -171,41 +171,58 @@ def build_interface_contract(
         },
         "cli": {
             "program": "ml-evaluation-workbench",
-            "command": "evaluate",
-            "positional_arguments": [
-                {
-                    "name": "dataset",
-                    "type": "path",
-                    "description": "Palmer Penguins CSV path",
-                }
-            ],
-            "options": [
-                {
-                    "name": "--output-dir",
-                    "type": "path",
-                    "default": "results",
+            "commands": {
+                "evaluate": {
+                    "positional_arguments": [
+                        {
+                            "name": "dataset",
+                            "type": "path",
+                            "description": "Palmer Penguins CSV path",
+                        }
+                    ],
+                    "options": [
+                        {
+                            "name": "--output-dir",
+                            "type": "path",
+                            "default": "results",
+                        },
+                        {
+                            "name": "--random-state",
+                            "type": "integer",
+                            "default": 42,
+                        },
+                        {
+                            "name": "--test-size",
+                            "type": "float",
+                            "default": 0.25,
+                        },
+                        {
+                            "name": "--cv-folds",
+                            "type": "integer",
+                            "default": 5,
+                        },
+                        {
+                            "name": "--calibration-folds",
+                            "type": "integer",
+                            "default": 3,
+                        },
+                    ],
+                    "writes_checksum_manifest": True,
                 },
-                {
-                    "name": "--random-state",
-                    "type": "integer",
-                    "default": 42,
+                "verify": {
+                    "positional_arguments": [
+                        {
+                            "name": "artifact_dir",
+                            "type": "path",
+                            "description": (
+                                "Directory containing generated artifacts "
+                                "and checksums.sha256"
+                            ),
+                        }
+                    ],
+                    "options": [],
                 },
-                {
-                    "name": "--test-size",
-                    "type": "float",
-                    "default": 0.25,
-                },
-                {
-                    "name": "--cv-folds",
-                    "type": "integer",
-                    "default": 5,
-                },
-                {
-                    "name": "--calibration-folds",
-                    "type": "integer",
-                    "default": 3,
-                },
-            ],
+            },
             "exit_codes": {
                 "0": "success",
                 "2": "argument_input_or_io_error",
@@ -243,6 +260,16 @@ def build_interface_contract(
                 ],
                 "returns": "EvaluationResult",
             },
+            "verify_artifact_manifest": {
+                "parameters": [
+                    {
+                        "name": "output_dir",
+                        "type": "str | pathlib.Path",
+                        "required": True,
+                    }
+                ],
+                "returns": "integer artifact count",
+            },
             "evaluation_result_fields": list(evaluation_result_fields),
         },
         "reports": {
@@ -255,8 +282,29 @@ def build_interface_contract(
             ],
             "reference_manifest": {
                 "path": "checksums.sha256",
-                "producer": "examples/run_demo.py",
+                "producer": "ml-evaluation-workbench evaluate",
                 "covers_generated_artifacts": True,
             },
+        },
+        "reproducibility": {
+            "dataset_verification_command": (
+                "python examples/download_penguins.py --check"
+            ),
+            "artifact_generation_command": "python examples/run_demo.py",
+            "artifact_verification_command": (
+                "ml-evaluation-workbench verify results"
+            ),
+            "manifest_algorithm": "sha256",
+            "reference_environment": {
+                "operating_system": "ubuntu-latest",
+                "python": "3.12",
+                "constraints_file": "requirements-reproducibility.txt",
+                "ci_expectation": (
+                    "byte_exact_match_to_committed_results"
+                ),
+            },
+            "compatibility_matrix_expectation": (
+                "successful_execution_and_self_consistent_generated_manifest"
+            ),
         },
     }

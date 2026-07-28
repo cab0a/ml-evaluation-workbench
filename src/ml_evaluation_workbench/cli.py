@@ -25,6 +25,11 @@ from .reporting import (
     write_predictions,
     write_robustness_scores,
 )
+from .reproducibility import (
+    MANIFEST_NAME,
+    _write_artifact_manifest,
+    verify_artifact_manifest,
+)
 
 
 def _cmd_evaluate(args: argparse.Namespace) -> int:
@@ -178,6 +183,7 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         output_dir / "interface_contract.json",
         interface_contract,
     )
+    manifest_path = _write_artifact_manifest(output_dir)
 
     dummy = result.metrics["models"]["dummy"]
     logistic = result.metrics["models"]["logistic_regression"]
@@ -318,6 +324,15 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
     print(f"Cross-experiment summary: {cross_experiment_summary_path}")
     print(f"Cross-experiment plot: {cross_experiment_plot_path}")
     print(f"Interface contract: {interface_contract_path}")
+    print(f"Checksums: {manifest_path}")
+    return 0
+
+
+def _cmd_verify(args: argparse.Namespace) -> int:
+    artifact_dir = Path(args.artifact_dir)
+    count = verify_artifact_manifest(artifact_dir)
+    print(f"Verified: {count} artifacts")
+    print(f"Manifest: {artifact_dir / MANIFEST_NAME}")
     return 0
 
 
@@ -366,6 +381,15 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     evaluate_parser.set_defaults(handler=_cmd_evaluate)
+    verify_parser = commands.add_parser(
+        "verify",
+        help="Verify generated artifacts against their checksum manifest",
+    )
+    verify_parser.add_argument(
+        "artifact_dir",
+        help="Directory containing artifacts and checksums.sha256",
+    )
+    verify_parser.set_defaults(handler=_cmd_verify)
     return parser
 
 

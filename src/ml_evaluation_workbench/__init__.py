@@ -9,6 +9,7 @@ from .dataset import (
     verify_dataset,
 )
 from .evaluation import EvaluationResult, evaluate_dataset
+from .reproducibility import verify_artifact_manifest
 
 __all__ = [
     "DATASET_SHA256",
@@ -19,7 +20,8 @@ __all__ = [
     "evaluate_dataset",
     "load_dataset",
     "sha256_file",
+    "verify_artifact_manifest",
     "verify_dataset",
 ]
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
