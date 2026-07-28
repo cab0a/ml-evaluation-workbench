@@ -2,18 +2,9 @@
 
 ## 日本語概要
 
-このリポジトリは、固定した公開データと共通splitを使い、dummy、logistic
-regression、5-nearest neighborsを比較するML評価プロジェクトです。モデル評価の
-設計や結果の監査方法を確認したいMLエンジニアに役立ちます。
+このリポジトリは、固定した公開データと共通splitを使い、dummy、logistic regression、5-nearest neighborsを比較するML評価プロジェクトです。モデル評価の設計や結果の監査方法を確認したいMLエンジニアに役立ちます。
 
-fold-level metrics、row-level predictions、feature ablation、split integrity、
-shuffled-label negative control、probability calibration、validation robustness、
-class-imbalance sensitivityと、6種類の実験から固定方針で選んだ25件の代表比較を
-含みます。v1.0.0では数値実験を変更せず、CLI、Python API、27個の成果物名、
-15種類のCSV列順、5種類のJSONトップレベルキーを1.x安定インターフェースとして
-固定しました。前処理は各training partition内でfitされ、成果物はSHA-256と
-Python 3.12参照環境で再現性を検証できます。安定性の範囲、評価結果の適用限界、
-再現手順の詳細は英語本文を参照してください。
+fold-level metrics、row-level predictions、feature ablation、split integrity、shuffled-label negative control、probability calibration、validation robustness、class-imbalance sensitivityと、6種類の実験から固定方針で選んだ25件の代表比較を含みます。v1.0.0では数値実験を変更せず、CLI、Python API、27個の成果物名、15種類のCSV列順、5種類のJSONトップレベルキーを1.x安定インターフェースとして固定しました。前処理は各training partition内でfitされ、成果物はSHA-256とPython 3.12参照環境で再現性を検証できます。安定性の範囲、評価結果の適用限界、再現手順の詳細は英語本文を参照してください。
 
 ---
 
