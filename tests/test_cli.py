@@ -27,7 +27,7 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     assert status == 0
     metrics = json.loads((tmp_path / "metrics.json").read_text(encoding="utf-8"))
     predictions = pd.read_csv(tmp_path / "predictions.csv")
-    assert metrics["project_version"] == "0.9.0"
+    assert metrics["project_version"] == "1.0.0"
     assert metrics["report_version"] == 8
     assert metrics["dataset"]["rows"] == 344
     assert metrics["cross_validation"]["folds"] == 5
@@ -73,8 +73,9 @@ def test_cli_writes_documented_artifacts(tmp_path: Path, capsys) -> None:
     contract = json.loads(
         (tmp_path / "interface_contract.json").read_text(encoding="utf-8")
     )
-    assert contract["project_version"] == "0.9.0"
-    assert contract["contract_version"] == 2
+    assert contract["project_version"] == "1.0.0"
+    assert contract["contract_version"] == 3
+    assert contract["stability"]["status"] == "stable_1_x"
     assert set(contract["cli"]["commands"]) == {"evaluate", "verify"}
     assert contract["cli"]["commands"]["evaluate"][
         "writes_checksum_manifest"
@@ -133,7 +134,7 @@ def test_cli_version(capsys) -> None:
         main(["--version"])
 
     assert exc_info.value.code == 0
-    assert capsys.readouterr().out == "0.9.0\n"
+    assert capsys.readouterr().out == "1.0.0\n"
 
 
 def test_cli_verify_reports_incomplete_manifest(

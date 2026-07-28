@@ -1,4 +1,4 @@
-"""Regenerate or verify the committed v0.9 evaluation artifacts."""
+"""Regenerate or verify the committed v1.0 evaluation artifacts."""
 
 from __future__ import annotations
 
@@ -239,12 +239,18 @@ def main() -> int:
             encoding="utf-8"
         )
     )
-    if interface_contract["project_version"] != "0.9.0":
+    if interface_contract["project_version"] != "1.0.0":
         raise SystemExit("Unexpected interface-contract project version")
-    if interface_contract["contract_version"] != 2:
+    if interface_contract["contract_version"] != 3:
         raise SystemExit("Unexpected interface-contract schema version")
+    if interface_contract["stability"]["status"] != "stable_1_x":
+        raise SystemExit("Unexpected interface-contract stability status")
     if interface_contract["reports"]["metrics_json"]["report_version"] != 8:
         raise SystemExit("Unexpected interface-contract report version")
+    if len(interface_contract["reports"]["csv_columns"]) != 15:
+        raise SystemExit("Unexpected interface-contract CSV schema count")
+    if len(interface_contract["reports"]["json_top_level_keys"]) != 5:
+        raise SystemExit("Unexpected interface-contract JSON schema count")
     contracted_artifacts = {
         artifact["path"]
         for artifact in interface_contract["reports"][
