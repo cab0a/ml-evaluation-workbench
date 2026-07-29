@@ -8,6 +8,8 @@
 
 ---
 
+## English Summary
+
 ML Evaluation Workbench writes 27 documented report artifacts and one
 `checksums.sha256` manifest. This document explains their roles, schema
 boundaries, and verification policy. Exact ordered schemas are generated in

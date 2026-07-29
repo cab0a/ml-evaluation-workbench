@@ -8,6 +8,8 @@
 
 ---
 
+## English Summary
+
 These constraints define what the committed evaluation can and cannot support.
 The [README](../README.md) keeps the most decision-relevant boundaries near the
 representative result.

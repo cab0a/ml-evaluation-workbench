@@ -8,6 +8,8 @@
 
 ---
 
+## English Summary
+
 Version 1.0.0 defines the documented software and artifact surfaces that remain
 backward compatible throughout the 1.x release line.
 

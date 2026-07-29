@@ -8,7 +8,10 @@
 
 ---
 
-All notable changes to this project are documented in this file.
+## English Summary
+
+All notable changes to this project are documented here, including evaluation,
+artifact, compatibility, and reproducibility updates.
 
 ## [1.0.0] - 2026-07-28
 
