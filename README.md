@@ -10,8 +10,6 @@ v1.0.0では数値実験を変えず、コマンドライン操作、Python API�
 
 ---
 
-[![CI](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/cab0a/ml-evaluation-workbench/actions/workflows/ci.yml)
-
 Compare fixed machine-learning baselines through shared splits, leakage-aware
 pipelines, row-level evidence, controlled diagnostics, and reproducible report
 artifacts.
