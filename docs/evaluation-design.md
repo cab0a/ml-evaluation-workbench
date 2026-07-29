@@ -1,5 +1,13 @@
 # Evaluation Design
 
+## 日本語概要
+
+本書は、固定した公開データと共通の分割を使うモデル比較について、問い、前処理境界、基準モデル、特徴量除去、負の対照実験、確率校正、検証データの摂動、クラス不均衡を評価する方法を定義します。探索や最良モデル選定ではなく、条件を固定した比較設計を記録しています。
+
+評価順序と各実験の統制条件は以下の英語本文を参照してください。
+
+---
+
 This document defines the controlled question, dataset scope, split policy,
 preprocessing boundaries, and six diagnostic experiment families used by ML
 Evaluation Workbench 1.0.0. See the [README](../README.md) for the shortest

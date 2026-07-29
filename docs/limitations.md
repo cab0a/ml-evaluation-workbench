@@ -1,5 +1,13 @@
 # Limitations and Claim Boundaries
 
+## 日本語概要
+
+本書は、一つの小規模データセット、一つの固定分割、限られた特徴量と分類器から得た結果の適用範囲を定義します。分割間の相関、ラベル入れ替え、確率校正、欠損・ノイズ、クラス不均衡、参照環境に関する制約を分けて記録しています。
+
+評価結果から主張できない内容は以下の英語本文を参照してください。
+
+---
+
 These constraints define what the committed evaluation can and cannot support.
 The [README](../README.md) keeps the most decision-relevant boundaries near the
 representative result.

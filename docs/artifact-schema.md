@@ -1,5 +1,13 @@
 # Artifact Schema
 
+## 日本語概要
+
+本書は、評価処理が生成する27件の成果物と`checksums.sha256`を、目的・形式・検証方法ごとに定義します。行単位の予測、分割単位の評価、確率校正、感度分析、横断集約、公開インターフェースの各CSV・JSON・画像を追跡できます。
+
+列順、JSON項目、原子的な書き込みの詳細は以下の英語本文を参照してください。
+
+---
+
 ML Evaluation Workbench writes 27 documented report artifacts and one
 `checksums.sha256` manifest. This document explains their roles, schema
 boundaries, and verification policy. Exact ordered schemas are generated in

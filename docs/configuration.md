@@ -1,5 +1,13 @@
 # Configuration and Interfaces
 
+## 日本語概要
+
+本書は、評価と検証のコマンドライン、既定のデータ分割、分類器、6種類の実験条件、公開Python API、終了コードを定義します。参照環境と対応Python版で検証する依存関係の範囲も分けて記録しています。
+
+引数、固定設定、使用例の詳細は以下の英語本文を参照してください。
+
+---
+
 This document defines the CLI commands, evaluation defaults, fixed model and
 experiment settings, Python API, and exit behavior for ML Evaluation Workbench
 1.0.0. The [README](../README.md) contains the minimal runnable workflow.

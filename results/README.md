@@ -2,17 +2,9 @@
 
 ## 日本語概要
 
-このディレクトリには、固定したPalmer Penguinsデータに対するモデル比較の結果があります。
+このディレクトリには、固定したPalmer Penguinsデータに対するモデル比較の参照結果があります。分割単位の評価、行単位の予測、特徴量除去、データ漏洩の診断、確率校正、欠損・ノイズとクラス不均衡への感度を記録しています。
 
-ML評価の設計、fold-level evidence、row-level predictions、再現可能な成果物を確認したい技術者向けです。
-
-主な内容は次のとおりです。
-
-- feature ablation、leakage diagnostics、probability calibration
-- robustness、class-imbalance sensitivity
-- fold-level evidence、row-level predictions、再現可能な成果物
-
-v1.0.0では実験条件や数値結果を変更せず、CLI、Python API、27個の成果物名、15種類のCSV列順、5種類のJSONトップレベルキーを1.x安定インターフェースとして固定しました。
+v1.0.0では実験条件や数値結果を変更せず、コマンドライン、Python API、27件の成果物名、15種類のCSV列順、5種類のJSON最上位項目を1.xの安定インターフェースとして固定しました。
 
 成果物のSHA-256検証、評価方法、結果の解釈、再現手順、安定性と適用範囲の詳細は以下の英語本文を参照してください。
 

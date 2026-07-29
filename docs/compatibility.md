@@ -1,5 +1,13 @@
 # Compatibility
 
+## 日本語概要
+
+本書は、1.xで維持するコマンドライン、Python API、評価レポート、成果物名、CSV列順、JSON項目、対応Python版の境界を定義します。互換な追加変更と、メジャー版の更新を必要とする変更を区別しています。
+
+安定性の対象と対象外は以下の英語本文を参照してください。
+
+---
+
 Version 1.0.0 defines the documented software and artifact surfaces that remain
 backward compatible throughout the 1.x release line.
 
