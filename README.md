@@ -27,10 +27,10 @@ artifacts.
 
 ## Overview
 
-ML Evaluation Workbench is a compact tabular-classification evaluation for ML
-engineers and reviewers who want to inspect the decisions behind a model
-comparison. It emphasizes evaluation design and claim boundaries rather than
-model complexity or leaderboard performance.
+ML Evaluation Workbench is a compact tabular-classification evaluation that
+exposes the decisions behind a model comparison. It emphasizes evaluation
+design and claim boundaries rather than model complexity or leaderboard
+performance.
 
 The project uses a checksum-pinned Palmer Penguins dataset and asks:
 
