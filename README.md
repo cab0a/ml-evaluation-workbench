@@ -234,6 +234,12 @@ accounting, class-retention sampling, summary selection, CLI errors, public API
 signatures, artifact schemas, manifest verification, and reference
 constraints.
 
+GitHub Actions runs the suite on Python 3.10 through 3.14. On Python 3.12, it
+also executes the README Quick Start, verifies the generated checksum manifest,
+and requires the primary metrics and comparison artifacts to be non-empty. A
+separate Python 3.12 job reproduces the committed reference artifacts and
+requires an empty result diff.
+
 ## Compatibility
 
 Version 1.0.0 keeps the documented CLI and exit meanings, package-root Python

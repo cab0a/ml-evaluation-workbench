@@ -40,6 +40,19 @@ jobs:
           python examples/download_penguins.py --check
           ml-evaluation-workbench verify results
 
+      - name: Run README Quick Start
+        if: matrix.python-version == '3.12'
+        run: |
+          python examples/download_penguins.py --check
+          ml-evaluation-workbench evaluate data/penguins.csv \
+            --output-dir output/quickstart
+          ml-evaluation-workbench verify output/quickstart
+          test -s output/quickstart/checksums.sha256
+          test -s output/quickstart/cross_experiment_summary.png
+          test -s output/quickstart/cross_experiment_summary.csv
+          test -s output/quickstart/model_comparison.csv
+          test -s output/quickstart/metrics.json
+
       - name: Run tests
         run: python -m pytest
 
